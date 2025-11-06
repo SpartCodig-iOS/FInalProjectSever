@@ -43,10 +43,28 @@ jobs:
     - name: Checkout
       uses: actions/checkout@v4
 
-    - name: Set up Swift
-      uses: shogo82148/actions-setup-swift@v1
-      with:
-        swift-version: '6.0'
+    - name: Install Swift 6 toolchain
+      env:
+        SWIFT_BRANCH: swift-6.0.1-release
+        SWIFT_VERSION: swift-6.0.1-RELEASE
+        SWIFT_PLATFORM: ubuntu22.04
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y \
+          libsqlite3-dev \
+          libncurses5 \
+          libcurl4 \
+          libatomic1 \
+          libxml2 \
+          tzdata \
+          zip \
+          unzip
+        curl -L https://download.swift.org/${SWIFT_BRANCH}/${SWIFT_PLATFORM}/${SWIFT_VERSION}/${SWIFT_VERSION}-${SWIFT_PLATFORM}.tar.gz \
+          -o swift.tar.gz
+        tar -xzf swift.tar.gz
+        sudo mv ${SWIFT_VERSION}-${SWIFT_PLATFORM} /opt/${SWIFT_VERSION}
+        echo "/opt/${SWIFT_VERSION}/usr/bin" >> $GITHUB_PATH
+        rm swift.tar.gz
 
     - name: Run Fluent migrations against Supabase
       env:
