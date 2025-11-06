@@ -45,6 +45,7 @@ jobs:
 
     - name: Install Swift 6 toolchain
       env:
+        SWIFT_BRANCH: swift-6.0.1-release
         SWIFT_VERSION: swift-6.0.1-RELEASE
         SWIFT_PLATFORM: ubuntu22.04
       run: |
@@ -60,7 +61,7 @@ jobs:
           zip \
           unzip
         SWIFT_TAR="${SWIFT_VERSION}-${SWIFT_PLATFORM}.tar.gz"
-        SWIFT_URL="https://download.swift.org/swift-6.0.1-release/${SWIFT_PLATFORM}/${SWIFT_VERSION}/${SWIFT_TAR}"
+        SWIFT_URL="https://download.swift.org/${SWIFT_BRANCH}/${SWIFT_PLATFORM}/${SWIFT_VERSION}/${SWIFT_TAR}"
         curl -fL "$SWIFT_URL" -o swift.tar.gz
         tar -xzf swift.tar.gz
         sudo mv ${SWIFT_VERSION}-${SWIFT_PLATFORM} /opt/${SWIFT_VERSION}
