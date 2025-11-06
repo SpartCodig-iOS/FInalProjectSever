@@ -63,6 +63,7 @@ RUN export DEBIAN_FRONTEND=noninteractive DEBCONF_NONINTERACTIVE_SEEN=true \
       libcurl4 \
       ca-certificates \
       tzdata \
+    && update-ca-certificates \
     && rm -r /var/lib/apt/lists/*
 
 # Create a vapor user and group with /app as its home directory

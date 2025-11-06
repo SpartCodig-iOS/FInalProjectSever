@@ -21,10 +21,10 @@ struct ProfileController: RouteCollection {
         let user = try req.requireAuthenticatedUser()
         let response = UserProfileResponse(
             id: try user.requireID(),
+            userId: user.username,
             email: user.email,
             name: user.name,
             avatarURL: user.avatarURL,
-            username: user.username,
             createdAt: user.createdAt,
             updatedAt: user.updatedAt
         )
@@ -53,10 +53,10 @@ struct ProfileController: RouteCollection {
 
 struct UserProfileResponse: Content {
     let id: UUID
+    let userId: String
     let email: String
     let name: String?
     let avatarURL: String?
-    let username: String
     let createdAt: Date?
     let updatedAt: Date?
 }

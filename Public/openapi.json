@@ -95,7 +95,9 @@
     },
     "/api/v1/auth/refresh": {
       "post": {
-        "tags": ["Auth"],
+        "tags": [
+          "Auth"
+        ],
         "summary": "토큰 갱신",
         "operationId": "refreshToken",
         "requestBody": {
@@ -124,11 +126,15 @@
     },
     "/api/v1/auth/me": {
       "get": {
-        "tags": ["Profile"],
+        "tags": [
+          "Profile"
+        ],
         "summary": "현재 사용자 조회",
         "operationId": "getCurrentUser",
         "security": [
-          { "bearerAuth": [] }
+          {
+            "bearerAuth": []
+          }
         ],
         "responses": {
           "200": {
@@ -146,11 +152,15 @@
     },
     "/api/v1/auth/profile": {
       "get": {
-        "tags": ["Profile"],
+        "tags": [
+          "Profile"
+        ],
         "summary": "프로필 조회",
         "operationId": "getProfile",
         "security": [
-          { "bearerAuth": [] }
+          {
+            "bearerAuth": []
+          }
         ],
         "responses": {
           "200": {
@@ -166,11 +176,15 @@
         }
       },
       "delete": {
-        "tags": ["Profile"],
+        "tags": [
+          "Profile"
+        ],
         "summary": "계정 삭제",
         "operationId": "deleteAccount",
         "security": [
-          { "bearerAuth": [] }
+          {
+            "bearerAuth": []
+          }
         ],
         "responses": {
           "200": {
@@ -199,48 +213,97 @@
       "HealthStatus": {
         "type": "object",
         "properties": {
-          "status": { "type": "string", "example": "ok" },
-          "database": { "type": "string", "example": "ok" }
+          "status": {
+            "type": "string",
+            "example": "ok"
+          },
+          "database": {
+            "type": "string",
+            "example": "ok"
+          }
         }
       },
       "SignupRequest": {
         "type": "object",
-        "required": ["email", "password"],
+        "required": [
+          "email",
+          "password"
+        ],
         "properties": {
-          "email": { "type": "string", "format": "email" },
-          "password": { "type": "string", "minLength": 6 },
-          "name": { "type": "string" }
+          "email": {
+            "type": "string",
+            "format": "email"
+          },
+          "password": {
+            "type": "string",
+            "minLength": 6
+          },
+          "name": {
+            "type": "string"
+          }
         }
       },
       "LoginRequest": {
         "type": "object",
-        "required": ["email", "password"],
+        "required": [
+          "email",
+          "password"
+        ],
         "properties": {
-          "email": { "type": "string" },
-          "password": { "type": "string" }
+          "email": {
+            "type": "string"
+          },
+          "password": {
+            "type": "string"
+          }
         }
       },
       "RefreshRequest": {
         "type": "object",
-        "required": ["refreshToken"],
+        "required": [
+          "refreshToken"
+        ],
         "properties": {
-          "refreshToken": { "type": "string" }
+          "refreshToken": {
+            "type": "string"
+          }
         }
       },
       "AuthResponse": {
         "type": "object",
         "properties": {
-          "code": { "type": "integer", "example": 200 },
-          "message": { "type": "string", "example": "Login successful" },
+          "code": {
+            "type": "integer",
+            "example": 200
+          },
+          "message": {
+            "type": "string",
+            "example": "Login successful"
+          },
           "data": {
             "type": "object",
             "properties": {
-              "user": { "$ref": "#/components/schemas/User" },
-              "accessToken": { "type": "string" },
-              "refreshToken": { "type": "string" },
-              "expiresAt": { "type": "string", "format": "date-time" },
-              "refreshExpiresAt": { "type": "string", "format": "date-time" },
-              "tokenType": { "type": "string", "example": "Bearer" }
+              "user": {
+                "$ref": "#/components/schemas/User"
+              },
+              "accessToken": {
+                "type": "string"
+              },
+              "refreshToken": {
+                "type": "string"
+              },
+              "expiresAt": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "refreshExpiresAt": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "tokenType": {
+                "type": "string",
+                "example": "Bearer"
+              }
             }
           }
         }
@@ -248,26 +311,45 @@
       "UserEnvelope": {
         "type": "object",
         "properties": {
-          "code": { "type": "integer", "example": 200 },
-          "data": { "$ref": "#/components/schemas/User" }
+          "code": {
+            "type": "integer",
+            "example": 200
+          },
+          "data": {
+            "$ref": "#/components/schemas/User"
+          }
         }
       },
       "ProfileEnvelope": {
         "type": "object",
         "properties": {
-          "code": { "type": "integer", "example": 200 },
-          "data": { "$ref": "#/components/schemas/UserProfile" }
+          "code": {
+            "type": "integer",
+            "example": 200
+          },
+          "data": {
+            "$ref": "#/components/schemas/UserProfile"
+          }
         }
       },
       "DeleteEnvelope": {
         "type": "object",
         "properties": {
-          "code": { "type": "integer", "example": 200 },
-          "message": { "type": "string", "example": "Account deleted" },
+          "code": {
+            "type": "integer",
+            "example": 200
+          },
+          "message": {
+            "type": "string",
+            "example": "Account deleted"
+          },
           "data": {
             "type": "object",
             "properties": {
-              "userID": { "type": "string", "format": "uuid" }
+              "userID": {
+                "type": "string",
+                "format": "uuid"
+              }
             }
           }
         }
@@ -275,24 +357,64 @@
       "User": {
         "type": "object",
         "properties": {
-          "id": { "type": "string", "format": "uuid" },
-          "email": { "type": "string", "format": "email" },
-          "username": { "type": "string" },
-          "name": { "type": "string", "nullable": true },
-          "avatarURL": { "type": "string", "nullable": true },
-          "createdAt": { "type": "string", "format": "date-time", "nullable": true }
+          "email": {
+            "type": "string",
+            "format": "email"
+          },
+          "name": {
+            "type": "string",
+            "nullable": true
+          },
+          "avatarURL": {
+            "type": "string",
+            "nullable": true
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "userId": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          }
         }
       },
       "UserProfile": {
         "type": "object",
         "properties": {
-          "id": { "type": "string", "format": "uuid" },
-          "email": { "type": "string", "format": "email" },
-          "username": { "type": "string" },
-          "name": { "type": "string", "nullable": true },
-          "avatarURL": { "type": "string", "nullable": true },
-          "createdAt": { "type": "string", "format": "date-time", "nullable": true },
-          "updatedAt": { "type": "string", "format": "date-time", "nullable": true }
+          "email": {
+            "type": "string",
+            "format": "email"
+          },
+          "name": {
+            "type": "string",
+            "nullable": true
+          },
+          "avatarURL": {
+            "type": "string",
+            "nullable": true
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "userId": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          }
         }
       }
     }

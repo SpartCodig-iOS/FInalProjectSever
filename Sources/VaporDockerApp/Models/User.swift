@@ -58,18 +58,18 @@ struct UserResponse: Content {
   let name: String?
   let avatarURL: String?
   let createdAt: Date?
-  let username: String
+  let userId: String
 
   init(from user: User) throws {
-    guard let id = user.id else {
+    guard let identifier = user.id else {
       throw Abort(.internalServerError, reason: "User missing ID")
     }
-    self.id = id
+    self.id = identifier
     self.email = user.email
     self.name = user.name
     self.avatarURL = user.avatarURL
     self.createdAt = user.createdAt
-    self.username = user.username
+    self.userId = user.username
   }
 }
 
