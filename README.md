@@ -27,7 +27,8 @@ swift test
    ```
 2. 실제 Superbase 프로젝트에서 발급받은 `SUPERBASE_URL`과 `SUPERBASE_ANON_KEY`, 그리고 `JWT_SECRET` 값을 `.env`에 채워 넣습니다. `SUPERBASE_ANON_KEY`에는 **service_role** 키를 사용해야 서버에서 RLS 정책을 통과하며 테이블에 동기화할 수 있습니다. (기존 `SUPABASE_*` 변수도 호환을 위해 동작합니다.)
 3. `SUPERBASE_PROFILE_TABLE` 값(기본 `profiles`)을 지정하면 회원가입 시 Superbase Postgres 테이블에 사용자 정보가 동기화됩니다.
-4. Vapor 애플리케이션은 `supabase-swift` 라이브러리를 사용하여 Superbase 인증/데이터 연동을 수행하며, 앱 로그인 시 이메일 전체 또는 이메일 @ 앞의 `username` 둘 다 허용합니다.
+4. Supabase Postgres를 사용해 배포한다면 Supabase 대시보드의 `Connection string`을 `SUPABASE_DB_URL` (또는 레거시 `SUPERBASE_DB_URL`)로 설정하세요. 로컬 개발은 기존 `DATABASE_*` 값으로 유지하고, 배포 환경은 URL 한 개만으로 연결됩니다.
+5. Vapor 애플리케이션은 `supabase-swift` 라이브러리를 사용하여 Superbase 인증/데이터 연동을 수행하며, 앱 로그인 시 이메일 전체 또는 이메일 @ 앞의 `username` 둘 다 허용합니다.
 
 Superbase 프로젝트에 아래와 같은 테이블이 준비되어 있어야 합니다 (기본 테이블명: `profiles`).
 
@@ -88,114 +89,9 @@ create policy "Public profiles read" on public.profiles for select
 
 회원가입 성공 시 Superbase Auth와 동시에 `SUPERBASE_PROFILE_TABLE`에 사용자 레코드가 upsert되므로 Superbase 대시보드에서도 곧바로 확인할 수 있습니다.
 
-## Render 배포 가이드
-
-이 프로젝트는 Render 무료 플랜에서 Docker를 사용하여 배포할 수 있도록 설정되어 있습니다.
-
-### 1. GitHub Repository 준비
-```bash
-git add .
-git commit -m "Setup CI/CD and Render deployment"
-git push origin main
-```
-
-### 2. Render.com에서 웹 서비스 생성
-
-1. [Render.com](https://render.com)에 회원가입/로그인
-2. 새 Web Service 생성
-3. GitHub Repository 연결
-4. 다음 설정 사용:
-   - **Runtime**: Docker
-   - **Branch**: main
-   - **Root Directory**: (비워둠)
-   - **Dockerfile Path**: ./Dockerfile
-
-### 3. 환경 변수 설정
-
-Render 대시보드에서 다음 환경 변수들을 설정:
-
-**필수 환경 변수:**
-```
-JWT_SECRET=your-secret-jwt-key-here
-SUPABASE_URL=https://your-project.supabase.co
-SUPABASE_ANON_KEY=your-supabase-anon-key
-SUPERBASE_URL=https://your-project.supabase.co
-SUPERBASE_ANON_KEY=your-supabase-anon-key
-SUPERBASE_PROFILE_TABLE=profiles
-LOG_LEVEL=info
-ENVIRONMENT=production
-```
-
-### 4. GitHub Actions Secrets 설정 (CI/CD용)
-
-Repository Settings > Secrets and variables > Actions에서 설정:
-
-```
-SUPABASE_URL=your-supabase-url
-SUPABASE_ANON_KEY=your-supabase-anon-key
-RENDER_SERVICE_ID=your-render-service-id
-RENDER_API_KEY=your-render-api-key
-```
-
-### 5. 자동 배포
-
-- `main` 브랜치에 푸시할 때마다 GitHub Actions가 자동으로:
-  1. 테스트 실행
-  2. Docker 이미지 빌드
-  3. Render에 배포
-  4. 보안 스캔 수행
-
-### 6. HTTPS 접속
-
-Render는 자동으로 HTTPS를 제공합니다:
-- `https://your-service-name.onrender.com`
-
-### 주요 특징
-
-✅ **무료 호스팅**: Render 무료 플랜 사용
-✅ **자동 HTTPS**: SSL 인증서 자동 관리
-✅ **Docker 지원**: 컨테이너 기반 배포
-✅ **CI/CD 파이프라인**: GitHub Actions 자동 빌드/배포
-✅ **Supabase 전용**: 무료 PostgreSQL 데이터베이스 (운영환경)
-✅ **하이브리드 DB**: 로컬 개발은 PostgreSQL, 운영은 Supabase
-✅ **보안 스캔**: Trivy 취약점 검사
-
-### 데이터베이스 구조
-
-이 프로젝트는 **하이브리드 데이터베이스 구조**를 사용합니다:
-
-**로컬 개발환경** (docker-compose):
-- PostgreSQL 컨테이너 사용
-- Fluent ORM으로 마이그레이션 관리
-- 완전한 개발 환경 제공
-
-**운영환경** (Render):
-- Supabase만 사용 (PostgreSQL 비활성화)
-- 로컬 DB 연결 오류 방지
-- Supabase Auth + 데이터 저장소 통합
-
-### 트러블슈팅
-
-**배포 실패 시:**
-1. Render 로그 확인
-2. 환경 변수 설정 점검
-3. Supabase 연결 상태 확인
-4. GitHub Actions 로그 검토
-
-**PostgreSQL 연결 오류 (해결됨):**
-- 운영환경에서는 PostgreSQL을 사용하지 않음
-- Health check에서 "database: supabase-only" 표시되면 정상
-
-**무료 플랜 제한:**
-- 15분간 비활성 시 서비스 슬립 (첫 요청 시 웨이크업)
-- 월 750시간 무료 사용 시간
-- 외부 데이터베이스 연결 권장 (Supabase 사용)
-
 ### See more
 
 - [Vapor Website](https://vapor.codes)
 - [Vapor Documentation](https://docs.vapor.codes)
 - [Vapor GitHub](https://github.com/vapor)
 - [Vapor Community](https://github.com/vapor-community)
-- [Render Documentation](https://render.com/docs)
-- [Supabase Documentation](https://supabase.com/docs)
