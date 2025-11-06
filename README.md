@@ -29,6 +29,7 @@ swift test
 3. `SUPERBASE_PROFILE_TABLE` 값(기본 `profiles`)을 지정하면 회원가입 시 Superbase Postgres 테이블에 사용자 정보가 동기화됩니다.
 4. Supabase Postgres를 사용해 배포한다면 Supabase 대시보드의 `Connection string`을 `SUPABASE_DB_URL` (또는 레거시 `SUPERBASE_DB_URL`)로 설정하세요. 로컬 개발은 기존 `DATABASE_*` 값으로 유지하고, 배포 환경은 URL 한 개만으로 연결됩니다.
 5. Vapor 애플리케이션은 `supabase-swift` 라이브러리를 사용하여 Superbase 인증/데이터 연동을 수행하며, 앱 로그인 시 이메일 전체 또는 이메일 @ 앞의 `username` 둘 다 허용합니다.
+6. GitHub Actions CI/CD에서 마이그레이션을 자동으로 실행하려면 저장소 시크릿(`Settings > Secrets and variables > Actions`)에 최소 하나의 DB URL (`SUPERBASE_DB_URL` 또는 `SUPABASE_DB_URL`)을 등록하세요. Render 배포 전에 CI가 Supabase에 접속해 스키마를 최신 상태로 유지합니다.
 
 Superbase 프로젝트에 아래와 같은 테이블이 준비되어 있어야 합니다 (기본 테이블명: `profiles`).
 

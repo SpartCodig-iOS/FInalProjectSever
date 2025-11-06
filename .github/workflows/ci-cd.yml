@@ -35,10 +35,36 @@ jobs:
     - name: Verify build success
       run: echo "✅ Docker build completed successfully"
 
+  migrate:
+    name: Run DB migrations
+    runs-on: ubuntu-latest
+    needs: build-test
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    - name: Set up Swift
+      uses: swift-actions/setup-swift@v2
+      with:
+        swift-version: '5.10'
+
+    - name: Run Fluent migrations against Supabase
+      env:
+        SUPERBASE_DB_URL: ${{ secrets.SUPERBASE_DB_URL }}
+        SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      run: |
+        if [ -z "${SUPERBASE_DB_URL}${SUPABASE_DB_URL}${DATABASE_URL}" ]; then
+          echo "Database URL secret is missing. Please set SUPERBASE_DB_URL or SUPABASE_DB_URL or DATABASE_URL." >&2
+          exit 1
+        fi
+        swift build --product VaporDockerApp
+        swift run --skip-build VaporDockerApp migrate --yes
+
   deploy:
     name: Deploy to Render
     runs-on: ubuntu-latest
-    needs: build-test
+    needs: [build-test, migrate]
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
 
     steps:
