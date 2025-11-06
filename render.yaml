@@ -11,8 +11,6 @@ services:
     envVars:
       - key: LOG_LEVEL
         value: info
-      - key: ENVIRONMENT
-        value: production
       - key: JWT_SECRET
         sync: false # 시크릿으로 별도 설정
       - key: SUPABASE_URL

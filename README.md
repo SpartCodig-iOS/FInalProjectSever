@@ -156,8 +156,23 @@ Render는 자동으로 HTTPS를 제공합니다:
 ✅ **자동 HTTPS**: SSL 인증서 자동 관리
 ✅ **Docker 지원**: 컨테이너 기반 배포
 ✅ **CI/CD 파이프라인**: GitHub Actions 자동 빌드/배포
-✅ **Supabase 연동**: 무료 PostgreSQL 데이터베이스
+✅ **Supabase 전용**: 무료 PostgreSQL 데이터베이스 (운영환경)
+✅ **하이브리드 DB**: 로컬 개발은 PostgreSQL, 운영은 Supabase
 ✅ **보안 스캔**: Trivy 취약점 검사
+
+### 데이터베이스 구조
+
+이 프로젝트는 **하이브리드 데이터베이스 구조**를 사용합니다:
+
+**로컬 개발환경** (docker-compose):
+- PostgreSQL 컨테이너 사용
+- Fluent ORM으로 마이그레이션 관리
+- 완전한 개발 환경 제공
+
+**운영환경** (Render):
+- Supabase만 사용 (PostgreSQL 비활성화)
+- 로컬 DB 연결 오류 방지
+- Supabase Auth + 데이터 저장소 통합
 
 ### 트러블슈팅
 
@@ -166,6 +181,10 @@ Render는 자동으로 HTTPS를 제공합니다:
 2. 환경 변수 설정 점검
 3. Supabase 연결 상태 확인
 4. GitHub Actions 로그 검토
+
+**PostgreSQL 연결 오류 (해결됨):**
+- 운영환경에서는 PostgreSQL을 사용하지 않음
+- Health check에서 "database: supabase-only" 표시되면 정상
 
 **무료 플랜 제한:**
 - 15분간 비활성 시 서비스 슬립 (첫 요청 시 웨이크업)
