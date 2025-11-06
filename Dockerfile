@@ -80,10 +80,9 @@ ENV SWIFT_BACKTRACE=enable=yes,sanitize=yes,threads=all,images=all,interactive=n
 # Ensure all further commands run as the vapor user
 USER vapor:vapor
 
-# Let Docker bind to port 8080 (or PORT env var for Render)
+# Let Docker bind to port 8080
 EXPOSE 8080
 
-# Start the Vapor service when the image is run
-# Use PORT env var if available (for Render), otherwise default to 8080
+# Start the Vapor service when the image is run, default to listening on 8080 in production environment
 ENTRYPOINT ["./VaporDockerApp"]
-CMD ["serve", "--env", "production", "--hostname", "0.0.0.0"]
+CMD ["serve", "--env", "production", "--hostname", "0.0.0.0", "--port", "8080"]

@@ -16,7 +16,17 @@ func routes(_ app: Application) throws {
     }
 
     app.get("docs") { req async -> Response in
-        let html = """
+        let script = """
+        const specUrl = `${window.location.origin}/openapi.json?ts=${Date.now()}`;
+        SwaggerUIBundle({
+            url: specUrl,
+            dom_id: '#swagger-ui',
+            docExpansion: 'none',
+            tagsSorter: 'alpha',
+            operationsSorter: 'alpha'
+        });
+        """
+        let htmlTemplate = """
         <!DOCTYPE html>
         <html lang=\"ko\">
         <head>
@@ -33,18 +43,13 @@ func routes(_ app: Application) throws {
             <script src=\"https://cdn.jsdelivr.net/npm/swagger-ui-dist@5/swagger-ui-bundle.js\"></script>
             <script>
             window.onload = () => {
-              SwaggerUIBundle({
-                url: '/openapi.json?ts=' + Date.now(),
-                dom_id: '#swagger-ui',
-                docExpansion: 'none',
-                tagsSorter: 'alpha',
-                operationsSorter: 'alpha'
-              });
+              %%SCRIPT%%
             };
             </script>
         </body>
         </html>
         """
+        let html = htmlTemplate.replacingOccurrences(of: "%%SCRIPT%%", with: script)
 
         var headers = HTTPHeaders()
         headers.add(name: .contentType, value: "text/html; charset=utf-8")

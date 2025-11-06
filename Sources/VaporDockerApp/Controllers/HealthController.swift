@@ -8,17 +8,12 @@ struct HealthController: RouteCollection {
 
     @Sendable
     func health(req: Request) async throws -> HealthStatusResponse {
-        var database = "supabase-only"
-
-        // Only check PostgreSQL in development environment
-        if req.application.environment == .development {
-            do {
-                _ = try await User.query(on: req.db).count()
-                database = "ok"
-            } catch {
-                database = "unavailable"
-                req.logger.error("Database health check failed: \(error.localizedDescription)")
-            }
+        var database = "ok"
+        do {
+            _ = try await User.query(on: req.db).count()
+        } catch {
+            database = "unavailable"
+            req.logger.error("Database health check failed: \(error.localizedDescription)")
         }
 
         return HealthStatusResponse(status: "ok", database: database)
