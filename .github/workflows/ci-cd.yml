@@ -52,7 +52,7 @@ jobs:
         sudo apt-get update
         sudo apt-get install -y \
           libsqlite3-dev \
-          libncurses5 \
+          libncurses5-dev \
           libcurl4 \
           libatomic1 \
           libxml2 \
