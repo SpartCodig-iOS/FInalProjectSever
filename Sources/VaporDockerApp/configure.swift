@@ -8,7 +8,9 @@ import Foundation
 
 // configures your application
 public func configure(_ app: Application) async throws {
-  // Allow static files and cross-origin requests from browsers running on other origins
+  // Use Render's assigned port if available and serve static files/CORS
+  app.http.server.configuration.port = Environment.get("PORT").flatMap(Int.init) ?? 8080
+
   app.middleware.use(FileMiddleware(publicDirectory: app.directory.publicDirectory))
 
   let corsConfiguration = CORSMiddleware.Configuration(
