@@ -1,3 +1,7 @@
+// ✅ IPv4 우선 설정 추가 (맨 위에만 추가)
+import dns from 'node:dns';
+dns.setDefaultResultOrder('ipv4first');
+
 import app from './app';
 import { env } from './config/env';
 import { logger } from './utils/logger';

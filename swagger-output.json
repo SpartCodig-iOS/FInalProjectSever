@@ -104,9 +104,6 @@
             "schema": {
               "type": "object",
               "properties": {
-                "identifier": {
-                  "example": "any"
-                },
                 "email": {
                   "example": "any"
                 },
