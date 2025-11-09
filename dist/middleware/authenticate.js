@@ -15,7 +15,7 @@ const extractBearer = (authHeader) => {
 const authenticate = async (req, res, next) => {
     const token = extractBearer(req.headers.authorization);
     if (!token) {
-        return res.status(401).json({ code: 401, message: 'Missing bearer token' });
+        return res.status(401).json({ code: 401, data: [], message: 'Missing bearer token' });
     }
     try {
         // 로컬 JWT 검증 - Supabase Auth 없이 생성된 토큰용
@@ -60,6 +60,6 @@ const authenticate = async (req, res, next) => {
     catch (error) {
         console.debug('Supabase token verification failed:', error.message);
     }
-    return res.status(401).json({ code: 401, message: 'Unauthorized' });
+    return res.status(401).json({ code: 401, data: [], message: 'Unauthorized' });
 };
 exports.authenticate = authenticate;

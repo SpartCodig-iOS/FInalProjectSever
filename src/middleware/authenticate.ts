@@ -24,7 +24,7 @@ const extractBearer = (authHeader?: string | null): string | null => {
 export const authenticate = async (req: Request, res: Response, next: NextFunction) => {
   const token = extractBearer(req.headers.authorization);
   if (!token) {
-    return res.status(401).json({ code: 401, message: 'Missing bearer token' });
+    return res.status(401).json({ code: 401, data: [], message: 'Missing bearer token' });
   }
 
   try {
@@ -70,5 +70,5 @@ export const authenticate = async (req: Request, res: Response, next: NextFuncti
     console.debug('Supabase token verification failed:', (error as Error).message);
   }
 
-  return res.status(401).json({ code: 401, message: 'Unauthorized' });
+  return res.status(401).json({ code: 401, data: [], message: 'Unauthorized' });
 };
