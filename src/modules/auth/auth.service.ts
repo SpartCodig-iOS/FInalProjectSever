@@ -131,8 +131,8 @@ export class AuthService {
     return { supabaseDeleted };
   }
 
-  async loginWithSupabaseCode(code: string): Promise<AuthSessionPayload> {
-    const session = await this.supabaseService.exchangeCodeForSession(code);
+  async loginWithSupabaseCode(code: string, codeVerifier: string): Promise<AuthSessionPayload> {
+    const session = await this.supabaseService.exchangeCodeForSession(code, codeVerifier);
     if (!session.user) {
       throw new UnauthorizedException('Supabase session does not include a user');
     }

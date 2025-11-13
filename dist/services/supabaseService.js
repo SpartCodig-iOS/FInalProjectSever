@@ -149,9 +149,15 @@ let SupabaseService = class SupabaseService {
             return 'unavailable';
         }
     }
-    async exchangeCodeForSession(code) {
+    async exchangeCodeForSession(code, codeVerifier) {
+        if (!code || !codeVerifier) {
+            throw new common_1.ServiceUnavailableException('[exchangeCodeForSession] invalid request: auth code and code verifier are required');
+        }
         const client = this.getClient();
-        const { data, error } = await client.auth.exchangeCodeForSession(code);
+        const { data, error } = await client.auth.exchangeCodeForSession({
+            auth_code: code,
+            code_verifier: codeVerifier,
+        });
         if (error || !data?.session) {
             throw new common_1.ServiceUnavailableException(`[exchangeCodeForSession] ${error?.message || 'Missing session'}`);
         }

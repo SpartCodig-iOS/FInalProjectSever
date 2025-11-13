@@ -17,6 +17,8 @@ const databaseUrl =
   process.env.DATABASE_URL ||
   process.env.DATABASE_URL?.trim();
 
+const appBaseUrl = process.env.APP_BASE_URL ?? 'http://localhost:8080';
+
 export const env = {
   nodeEnv: process.env.NODE_ENV ?? 'development',
   port: Number(process.env.PORT ?? 8080),
@@ -42,6 +44,8 @@ export const env = {
     '',
   supabaseProfileTable:
     process.env.SUPERBASE_PROFILE_TABLE ?? process.env.SUPABASE_PROFILE_TABLE ?? 'profiles',
+  appBaseUrl,
+  appleRedirectUri: process.env.APPLE_REDIRECT_URI ?? `${appBaseUrl}/api/v1/auth/apple/callback`,
 };
 
 export const isProduction = env.nodeEnv === 'production';

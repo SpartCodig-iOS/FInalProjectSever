@@ -57,16 +57,18 @@ Nest 앱 엔트리포인트는 `src/main.ts`, 프로덕션은 `node dist/main.js
 | `SUPABASE_URL`              | Supabase 프로젝트 URL                    |
 | `SUPABASE_SERVICE_ROLE_KEY` | Admin API 호출을 위한 Service Role Key   |
 | `SUPABASE_PROFILE_TABLE`    | 프로필 테이블명 (기본값 `profiles`)      |
+| `APP_BASE_URL`              | 서버 베이스 URL (기본값 `http://localhost:8080`) |
+| `APPLE_REDIRECT_URI`        | 애플 OAuth 리다이렉트 URI (기본값 `${APP_BASE_URL}/api/v1/auth/apple/callback`) |
 
 서버는 Admin API 로 사용자 생성/삭제를 수행하고 `profiles` 테이블을 동기화합니다.
 
 ### Supabase + Apple 로그인
 
-- Supabase Auth의 애플 OAuth 흐름을 그대로 사용합니다. `/api/v1/auth/apple` 는 Supabase `authorize?provider=apple` URL을 생성해 주고, `mode=redirect` 파라미터를 사용하면 즉시 애플 로그인 페이지로 이동합니다.
-- 애플 로그인 완료 후 Supabase가 전달한 `code`를 `/api/v1/auth/apple/callback` (GET 또는 POST) 에서 처리하여 기존과 동일한 JWT/세션 응답을 내려줍니다. 프런트엔드에서 Supabase authorize 호출 시 `redirect_to=http://localhost:8080/api/v1/auth/apple/callback` 과 같이 서버 콜백 URL을 지정하면 됩니다.
+- `/api/v1/auth/apple` 은 PKCE `code_challenge`/`code_verifier` 를 생성하고 Supabase `authorize?provider=apple` URL을 돌려줍니다. `mode=redirect` 를 주면 서버가 즉시 애플 로그인 페이지로 이동하며, `clientState` 쿼리로 전달한 값은 콜백 응답에 그대로 포함됩니다.
+- 애플 로그인 완료 후 Supabase가 전달한 `code` 와 `state` 를 `/api/v1/auth/apple/callback` (GET) 으로 전달하면, 서버가 저장해 둔 `code_verifier` 로 Supabase `exchangeCodeForSession` 을 호출해 JWT/세션을 발급합니다.
+- 모바일/웹 앱에서 자체적으로 code/codeVerifier 를 생성했다면 `POST /api/v1/auth/apple/callback` 에 `{ code, codeVerifier, state? }` 를 보내면 됩니다. (`codeVerifier` 필수)
 - 공식 문서: [Supabase Apple 로그인 가이드](https://supabase.com/docs/guides/auth/social-login/auth-apple?environment=server&framework=nextjs&platform=web)
-- 브라우저에서 `http://localhost:8080/public/apple-login.html` 페이지를 열고 버튼을 누르면 위의 흐름을 바로 테스트할 수 있습니다.
-- 모바일/웹 앱에서 직접 code를 받은 뒤 서버에 전달하려면 `POST /api/v1/auth/apple/callback` 의 Body `{ code, state? }` 를 호출하면 됩니다. 서버가 Supabase에 `exchangeCodeForSession` 요청을 대신 보내고 JWT/세션을 응답해 줍니다.
+- 브라우저에서 `http://localhost:8080/public/apple-login.html` 페이지를 열고 `redirectTo`/`clientState` 를 입력한 뒤 버튼을 누르면 전체 흐름을 테스트할 수 있습니다.
 
 ---
 

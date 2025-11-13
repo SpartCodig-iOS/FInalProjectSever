@@ -160,9 +160,17 @@ export class SupabaseService {
     }
   }
 
-  async exchangeCodeForSession(code: string): Promise<Session> {
+  async exchangeCodeForSession(code: string, codeVerifier: string): Promise<Session> {
+    if (!code || !codeVerifier) {
+      throw new ServiceUnavailableException(
+        '[exchangeCodeForSession] invalid request: auth code and code verifier are required',
+      );
+    }
     const client = this.getClient();
-    const { data, error } = await client.auth.exchangeCodeForSession(code);
+    const { data, error } = await (client.auth as any).exchangeCodeForSession({
+      auth_code: code,
+      code_verifier: codeVerifier,
+    });
     if (error || !data?.session) {
       throw new ServiceUnavailableException(
         `[exchangeCodeForSession] ${error?.message || 'Missing session'}`,

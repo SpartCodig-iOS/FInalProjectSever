@@ -116,8 +116,8 @@ let AuthService = class AuthService {
         }
         return { supabaseDeleted };
     }
-    async loginWithSupabaseCode(code) {
-        const session = await this.supabaseService.exchangeCodeForSession(code);
+    async loginWithSupabaseCode(code, codeVerifier) {
+        const session = await this.supabaseService.exchangeCodeForSession(code, codeVerifier);
         if (!session.user) {
             throw new common_1.UnauthorizedException('Supabase session does not include a user');
         }

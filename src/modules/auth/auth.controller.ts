@@ -31,6 +31,7 @@ import { toUserResponse } from '../../utils/mappers';
 import { AuthGuard } from '../../common/guards/auth.guard';
 import { RequestWithUser } from '../../types/request';
 import { env } from '../../config/env';
+import { OAuthStateService } from '../../services/oauthStateService';
 import {
   DeleteAccountResponseDto,
   LoginResponseDto,
@@ -41,7 +42,10 @@ import {
 @ApiTags('Auth')
 @Controller('api/v1/auth')
 export class AuthController {
-  constructor(private readonly authService: AuthService) {}
+  constructor(
+    private readonly authService: AuthService,
+    private readonly oauthStateService: OAuthStateService,
+  ) {}
 
   private buildAuthSuccessResponse(
     result: Awaited<ReturnType<AuthService['signup']>>,
@@ -62,14 +66,24 @@ export class AuthController {
     );
   }
 
-  private buildSupabaseAppleUrl(redirectTo?: string, state?: string): string {
+  private buildSupabaseAppleUrl({
+    redirectTo,
+    state,
+    codeChallenge,
+  }: {
+    redirectTo?: string;
+    state?: string;
+    codeChallenge?: string;
+  }): string {
     const base = new URL(`${env.supabaseUrl}/auth/v1/authorize`);
     base.searchParams.set('provider', 'apple');
-    if (redirectTo) {
-      base.searchParams.set('redirect_to', redirectTo);
-    }
+    base.searchParams.set('redirect_to', redirectTo ?? env.appleRedirectUri);
     if (state) {
       base.searchParams.set('state', state);
+    }
+    if (codeChallenge) {
+      base.searchParams.set('code_challenge', codeChallenge);
+      base.searchParams.set('code_challenge_method', 'S256');
     }
     return base.toString();
   }
@@ -214,7 +228,7 @@ export class AuthController {
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: '애플 로그인 URL 반환/리다이렉트 (Supabase OAuth)' })
   @ApiQuery({ name: 'redirectTo', required: false, description: '완료 후 돌아갈 URL (redirect_to)' })
-  @ApiQuery({ name: 'state', required: false })
+  @ApiQuery({ name: 'clientState', required: false, description: '클라이언트에서 전달할 state 값' })
   @ApiQuery({
     name: 'mode',
     required: false,
@@ -222,11 +236,16 @@ export class AuthController {
   })
   async appleAuthorize(
     @Query('redirectTo') redirectTo?: string,
-    @Query('state') state?: string,
+    @Query('clientState') clientState?: string,
     @Query('mode') mode?: string,
     @Res({ passthrough: true }) res?: Response,
   ) {
-    const url = this.buildSupabaseAppleUrl(redirectTo, state);
+    const { stateId, codeChallenge } = this.oauthStateService.generateState(clientState);
+    const url = this.buildSupabaseAppleUrl({
+      redirectTo,
+      state: stateId,
+      codeChallenge,
+    });
     if (mode === 'redirect' && res) {
       res.redirect(url);
       return;
@@ -243,10 +262,14 @@ export class AuthController {
     if (!code) {
       throw new BadRequestException('Missing authorization code');
     }
-    const result = await this.authService.loginWithSupabaseCode(code);
+    const stored = this.oauthStateService.consumeState(state);
+    if (!stored) {
+      throw new BadRequestException('Invalid or expired state');
+    }
+    const result = await this.authService.loginWithSupabaseCode(code, stored.codeVerifier);
     const response = this.buildAuthSuccessResponse(result, 'Apple login successful');
-    if (state) {
-      (response.data as any).state = state;
+    if (stored.clientState) {
+      (response.data as any).state = stored.clientState;
     }
     return response;
   }
@@ -257,18 +280,19 @@ export class AuthController {
   @ApiBody({
     schema: {
       type: 'object',
-      required: ['code'],
+      required: ['code', 'codeVerifier'],
       properties: {
         code: { type: 'string', example: 'oauth-code-from-supabase' },
+        codeVerifier: { type: 'string', example: 'generated-code-verifier' },
         state: { type: 'string', example: 'client-state', nullable: true },
       },
     },
   })
-  async appleCallbackFromClient(@Body() body: { code?: string; state?: string }) {
-    if (!body.code) {
-      throw new BadRequestException('Missing authorization code');
+  async appleCallbackFromClient(@Body() body: { code?: string; codeVerifier?: string; state?: string }) {
+    if (!body.code || !body.codeVerifier) {
+      throw new BadRequestException('Missing authorization code or codeVerifier');
     }
-    const result = await this.authService.loginWithSupabaseCode(body.code);
+    const result = await this.authService.loginWithSupabaseCode(body.code, body.codeVerifier);
     const response = this.buildAuthSuccessResponse(result, 'Apple login successful');
     if (body.state) {
       (response.data as any).state = body.state;
