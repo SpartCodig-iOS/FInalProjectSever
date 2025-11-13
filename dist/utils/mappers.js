@@ -20,10 +20,23 @@ const toProfileResponse = (user) => ({
     updatedAt: user.updated_at,
 });
 exports.toProfileResponse = toProfileResponse;
-const fromSupabaseUser = (supabaseUser) => ({
+const resolveUserName = (user, options) => {
+    const metadata = user.user_metadata ?? {};
+    const displayName = metadata.display_name ??
+        metadata.full_name ??
+        null;
+    const regularName = metadata.name ??
+        metadata.full_name ??
+        null;
+    if (options?.preferDisplayName) {
+        return displayName ?? regularName;
+    }
+    return regularName ?? displayName;
+};
+const fromSupabaseUser = (supabaseUser, options) => ({
     id: supabaseUser.id,
     email: supabaseUser.email ?? '',
-    name: supabaseUser.user_metadata?.name ?? null,
+    name: resolveUserName(supabaseUser, options),
     avatar_url: supabaseUser.user_metadata?.avatar_url ?? null,
     username: supabaseUser.email?.split('@')[0] || supabaseUser.id,
     password_hash: '',

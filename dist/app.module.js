@@ -10,6 +10,7 @@ exports.AppModule = void 0;
 const common_1 = require("@nestjs/common");
 const shared_module_1 = require("./modules/shared/shared.module");
 const auth_module_1 = require("./modules/auth/auth.module");
+const oauth_module_1 = require("./modules/oauth/oauth.module");
 const profile_module_1 = require("./modules/profile/profile.module");
 const session_module_1 = require("./modules/session/session.module");
 const health_module_1 = require("./modules/health/health.module");
@@ -22,6 +23,6 @@ let AppModule = class AppModule {
 exports.AppModule = AppModule;
 exports.AppModule = AppModule = __decorate([
     (0, common_1.Module)({
-        imports: [shared_module_1.SharedModule, auth_module_1.AuthModule, profile_module_1.ProfileModule, session_module_1.SessionModule, health_module_1.HealthModule],
+        imports: [shared_module_1.SharedModule, auth_module_1.AuthModule, oauth_module_1.OAuthModule, profile_module_1.ProfileModule, session_module_1.SessionModule, health_module_1.HealthModule],
     })
 ], AppModule);

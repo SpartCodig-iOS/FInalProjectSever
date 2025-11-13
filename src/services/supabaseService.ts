@@ -1,5 +1,6 @@
 import { Injectable, ServiceUnavailableException } from '@nestjs/common';
-import { createClient, Session, SupabaseClient, User } from '@supabase/supabase-js';
+import { createClient, SupabaseClient, User } from '@supabase/supabase-js';
+import { LoginType } from '../types/auth';
 import { env } from '../config/env';
 
 @Injectable()
@@ -86,7 +87,28 @@ export class SupabaseService {
     return data;
   }
 
-  async upsertProfile(params: { id: string; email: string; name?: string | null; username: string }) {
+  async findProfileById(id: string) {
+    const client = this.getClient();
+    const { data, error } = await client
+      .from(env.supabaseProfileTable)
+      .select('id, email, username, name, login_type')
+      .eq('id', id)
+      .maybeSingle();
+
+    if (error) {
+      throw error;
+    }
+
+    return data;
+  }
+
+  async upsertProfile(params: {
+    id: string;
+    email: string;
+    name?: string | null;
+    username: string;
+    loginType?: LoginType;
+  }) {
     const client = this.getClient();
     const now = new Date().toISOString();
     const payload = {
@@ -94,11 +116,39 @@ export class SupabaseService {
       email: params.email,
       name: params.name,
       username: params.username,
+      login_type: params.loginType ?? null,
       created_at: now,
       updated_at: now,
     };
     const { error } = await client.from(env.supabaseProfileTable).upsert(payload, { onConflict: 'id' });
     if (error) throw error;
+  }
+
+  async ensureProfileFromSupabaseUser(user: User, loginType: LoginType) {
+    if (!user.email) {
+      throw new Error('Supabase user does not contain an email');
+    }
+    const username =
+      (user.user_metadata?.username as string | undefined) ??
+      user.email.split('@')[0] ??
+      user.id;
+
+    const metadata = user.user_metadata ?? {};
+    const displayName = (metadata.display_name as string | null) ?? null;
+    const standardName =
+      (metadata.name as string | null) ??
+      (metadata.full_name as string | null) ??
+      null;
+    const shouldUseDisplayName = loginType !== 'email' && loginType !== 'username';
+    const resolvedName = shouldUseDisplayName ? displayName ?? standardName : standardName ?? displayName;
+
+    await this.upsertProfile({
+      id: user.id,
+      email: user.email,
+      name: resolvedName,
+      username,
+      loginType,
+    });
   }
 
   async deleteUser(id: string) {
@@ -160,22 +210,4 @@ export class SupabaseService {
     }
   }
 
-  async exchangeCodeForSession(code: string, codeVerifier: string): Promise<Session> {
-    if (!code || !codeVerifier) {
-      throw new ServiceUnavailableException(
-        '[exchangeCodeForSession] invalid request: auth code and code verifier are required',
-      );
-    }
-    const client = this.getClient();
-    const { data, error } = await (client.auth as any).exchangeCodeForSession({
-      auth_code: code,
-      code_verifier: codeVerifier,
-    });
-    if (error || !data?.session) {
-      throw new ServiceUnavailableException(
-        `[exchangeCodeForSession] ${error?.message || 'Missing session'}`,
-      );
-    }
-    return data.session;
-  }
 }

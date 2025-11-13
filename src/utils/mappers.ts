@@ -20,10 +20,31 @@ export const toProfileResponse = (user: UserRecord): UserProfileDto => ({
   updatedAt: user.updated_at,
 });
 
-export const fromSupabaseUser = (supabaseUser: User): UserRecord => ({
+interface SupabaseNameOptions {
+  preferDisplayName?: boolean;
+}
+
+const resolveUserName = (user: User, options?: SupabaseNameOptions): string | null => {
+  const metadata = user.user_metadata ?? {};
+  const displayName =
+    (metadata.display_name as string | undefined) ??
+    (metadata.full_name as string | undefined) ??
+    null;
+  const regularName =
+    (metadata.name as string | undefined) ??
+    (metadata.full_name as string | undefined) ??
+    null;
+
+  if (options?.preferDisplayName) {
+    return displayName ?? regularName;
+  }
+  return regularName ?? displayName;
+};
+
+export const fromSupabaseUser = (supabaseUser: User, options?: SupabaseNameOptions): UserRecord => ({
   id: supabaseUser.id,
   email: supabaseUser.email ?? '',
-  name: (supabaseUser.user_metadata?.name as string | null) ?? null,
+  name: resolveUserName(supabaseUser, options),
   avatar_url: (supabaseUser.user_metadata?.avatar_url as string | null) ?? null,
   username: supabaseUser.email?.split('@')[0] || supabaseUser.id,
   password_hash: '',

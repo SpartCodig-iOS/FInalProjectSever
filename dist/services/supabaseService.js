@@ -84,6 +84,18 @@ let SupabaseService = class SupabaseService {
         }
         return data;
     }
+    async findProfileById(id) {
+        const client = this.getClient();
+        const { data, error } = await client
+            .from(env_1.env.supabaseProfileTable)
+            .select('id, email, username, name, login_type')
+            .eq('id', id)
+            .maybeSingle();
+        if (error) {
+            throw error;
+        }
+        return data;
+    }
     async upsertProfile(params) {
         const client = this.getClient();
         const now = new Date().toISOString();
@@ -92,12 +104,35 @@ let SupabaseService = class SupabaseService {
             email: params.email,
             name: params.name,
             username: params.username,
+            login_type: params.loginType ?? null,
             created_at: now,
             updated_at: now,
         };
         const { error } = await client.from(env_1.env.supabaseProfileTable).upsert(payload, { onConflict: 'id' });
         if (error)
             throw error;
+    }
+    async ensureProfileFromSupabaseUser(user, loginType) {
+        if (!user.email) {
+            throw new Error('Supabase user does not contain an email');
+        }
+        const username = user.user_metadata?.username ??
+            user.email.split('@')[0] ??
+            user.id;
+        const metadata = user.user_metadata ?? {};
+        const displayName = metadata.display_name ?? null;
+        const standardName = metadata.name ??
+            metadata.full_name ??
+            null;
+        const shouldUseDisplayName = loginType !== 'email' && loginType !== 'username';
+        const resolvedName = shouldUseDisplayName ? displayName ?? standardName : standardName ?? displayName;
+        await this.upsertProfile({
+            id: user.id,
+            email: user.email,
+            name: resolvedName,
+            username,
+            loginType,
+        });
     }
     async deleteUser(id) {
         const client = this.getClient();
@@ -148,20 +183,6 @@ let SupabaseService = class SupabaseService {
             console.error('[health] Supabase health check exception', error);
             return 'unavailable';
         }
-    }
-    async exchangeCodeForSession(code, codeVerifier) {
-        if (!code || !codeVerifier) {
-            throw new common_1.ServiceUnavailableException('[exchangeCodeForSession] invalid request: auth code and code verifier are required');
-        }
-        const client = this.getClient();
-        const { data, error } = await client.auth.exchangeCodeForSession({
-            auth_code: code,
-            code_verifier: codeVerifier,
-        });
-        if (error || !data?.session) {
-            throw new common_1.ServiceUnavailableException(`[exchangeCodeForSession] ${error?.message || 'Missing session'}`);
-        }
-        return data.session;
     }
 };
 exports.SupabaseService = SupabaseService;

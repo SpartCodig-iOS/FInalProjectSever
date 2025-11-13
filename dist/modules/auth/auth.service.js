@@ -64,19 +64,20 @@ let AuthService = class AuthService {
             try {
                 profile = await this.supabaseService.findProfileByIdentifier(identifier);
             }
-            catch (error) {
+            catch {
                 throw new common_1.UnauthorizedException('Invalid credentials');
             }
             if (!profile?.email) {
                 throw new common_1.UnauthorizedException('Invalid credentials');
             }
             emailToUse = profile.email.toLowerCase();
+            loginType = 'username';
         }
         let supabaseUser;
         try {
             supabaseUser = await this.supabaseService.signIn(emailToUse, input.password);
         }
-        catch (error) {
+        catch {
             throw new common_1.UnauthorizedException('Invalid credentials');
         }
         const user = (0, mappers_1.fromSupabaseUser)(supabaseUser);
@@ -116,13 +117,43 @@ let AuthService = class AuthService {
         }
         return { supabaseDeleted };
     }
-    async loginWithSupabaseCode(code, codeVerifier) {
-        const session = await this.supabaseService.exchangeCodeForSession(code, codeVerifier);
-        if (!session.user) {
-            throw new common_1.UnauthorizedException('Supabase session does not include a user');
+    async loginWithOAuthToken(accessToken, loginType = 'email') {
+        if (!accessToken) {
+            throw new common_1.UnauthorizedException('Missing Supabase access token');
         }
-        const user = (0, mappers_1.fromSupabaseUser)(session.user);
-        return this.buildAuthSession(user, 'apple');
+        const supabaseUser = await this.supabaseService.getUserFromToken(accessToken);
+        if (!supabaseUser) {
+            throw new common_1.UnauthorizedException('Invalid Supabase access token');
+        }
+        await this.supabaseService.ensureProfileFromSupabaseUser(supabaseUser, loginType);
+        const preferDisplayName = loginType !== 'email' && loginType !== 'username';
+        const user = (0, mappers_1.fromSupabaseUser)(supabaseUser, { preferDisplayName });
+        return this.buildAuthSession(user, loginType);
+    }
+    async checkOAuthAccount(accessToken, loginType = 'email') {
+        if (!accessToken) {
+            throw new common_1.UnauthorizedException('Missing Supabase access token');
+        }
+        const supabaseUser = await this.supabaseService.getUserFromToken(accessToken);
+        if (!supabaseUser || !supabaseUser.id || !supabaseUser.email) {
+            throw new common_1.UnauthorizedException('Invalid Supabase access token');
+        }
+        const profile = await this.supabaseService.findProfileById(supabaseUser.id);
+        const usernameFromUser = (supabaseUser.user_metadata?.username ?? null) ||
+            (supabaseUser.email ? supabaseUser.email.split('@')[0] : null);
+        return {
+            exists: Boolean(profile),
+            userId: supabaseUser.id,
+            email: supabaseUser.email,
+            loginType,
+            profile: profile
+                ? {
+                    username: usernameFromUser,
+                    name: profile.name ?? null,
+                    loginType: profile.login_type ?? null,
+                }
+                : null,
+        };
     }
 };
 exports.AuthService = AuthService;

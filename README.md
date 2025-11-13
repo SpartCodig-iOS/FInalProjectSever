@@ -57,18 +57,16 @@ Nest 앱 엔트리포인트는 `src/main.ts`, 프로덕션은 `node dist/main.js
 | `SUPABASE_URL`              | Supabase 프로젝트 URL                    |
 | `SUPABASE_SERVICE_ROLE_KEY` | Admin API 호출을 위한 Service Role Key   |
 | `SUPABASE_PROFILE_TABLE`    | 프로필 테이블명 (기본값 `profiles`)      |
-| `APP_BASE_URL`              | 서버 베이스 URL (기본값 `http://localhost:8080`) |
-| `APPLE_REDIRECT_URI`        | 애플 OAuth 리다이렉트 URI (기본값 `${APP_BASE_URL}/api/v1/auth/apple/callback`) |
 
 서버는 Admin API 로 사용자 생성/삭제를 수행하고 `profiles` 테이블을 동기화합니다.
 
-### Supabase + Apple 로그인
+### Supabase 소셜 로그인 연동
 
-- `/api/v1/auth/apple` 은 PKCE `code_challenge`/`code_verifier` 를 생성하고 Supabase `authorize?provider=apple` URL을 돌려줍니다. `mode=redirect` 를 주면 서버가 즉시 애플 로그인 페이지로 이동하며, `clientState` 쿼리로 전달한 값은 콜백 응답에 그대로 포함됩니다.
-- 애플 로그인 완료 후 Supabase가 전달한 `code` 와 `state` 를 `/api/v1/auth/apple/callback` (GET) 으로 전달하면, 서버가 저장해 둔 `code_verifier` 로 Supabase `exchangeCodeForSession` 을 호출해 JWT/세션을 발급합니다.
-- 모바일/웹 앱에서 자체적으로 code/codeVerifier 를 생성했다면 `POST /api/v1/auth/apple/callback` 에 `{ code, codeVerifier, state? }` 를 보내면 됩니다. (`codeVerifier` 필수)
-- 공식 문서: [Supabase Apple 로그인 가이드](https://supabase.com/docs/guides/auth/social-login/auth-apple?environment=server&framework=nextjs&platform=web)
-- 브라우저에서 `http://localhost:8080/public/apple-login.html` 페이지를 열고 `redirectTo`/`clientState` 를 입력한 뒤 버튼을 누르면 전체 흐름을 테스트할 수 있습니다.
+- 클라이언트(웹/모바일)에서 Supabase Auth SDK를 사용해 애플/구글 등 소셜 로그인을 수행하고, Supabase access token(JWT)을 발급받습니다.
+- 로그인 전 분기 처리가 필요하면 `POST /api/v1/oauth/lookup` 으로 `{ accessToken, loginType? }` 를 보내 가입 여부(`registered` Boolean만 반환)를 확인하세요. true면 즉시 로그인 가능, false면 추가 약관/닉네임 입력 플로우를 띄울 수 있습니다.
+- 소셜 로그인 이후 서버 세션/JWT가 필요하면 `POST /api/v1/oauth/signup` 또는 `POST /api/v1/oauth/login` 에 `{ accessToken, loginType? }` 를 전송하세요. 서버가 Supabase 토큰을 검증하고, `profiles` 테이블에 소셜 타입을 기록한 뒤 기존 로그인과 동일한 JWT/세션을 내려줍니다.
+- 일반 이메일/비밀번호 로그인은 `POST /api/v1/auth/login` 에 `{ identifier/email, password }` 를 전달하면 됩니다.
+- 추가로 유저 프로필을 싱크하거나 RLS를 사용하는 API에서는 Supabase 토큰을 그대로 사용해도 되고, 서버 JWT를 사용해도 됩니다.
 
 ---
 
@@ -96,9 +94,14 @@ Nest 앱 엔트리포인트는 `src/main.ts`, 프로덕션은 `node dist/main.js
 | `POST` | `/api/v1/auth/login`      | 로그인 (이메일/아이디) | - |
 | `POST` | `/api/v1/auth/refresh`    | 토큰 재발급        | Refresh Token |
 | `DELETE` | `/api/v1/auth/account`  | 계정 삭제 (Supabase 포함) | Bearer |
-| `GET` | `/api/v1/auth/apple` | 애플 로그인 URL (Supabase OAuth) | - |
-| `GET` | `/api/v1/auth/apple/callback` | 애플 로그인 콜백 처리 | - |
-| `POST` | `/api/v1/auth/apple/callback` | 애플 OAuth code → JWT 발급 | - |
+
+### OAuth (소셜)
+
+| 메서드 | 경로                      | 설명               | 인증 |
+|--------|---------------------------|--------------------|------|
+| `POST` | `/api/v1/oauth/lookup`    | Supabase access token으로 가입 여부 확인 | - |
+| `POST` | `/api/v1/oauth/signup`    | 소셜/OAuth access token → 서버 JWT 발급 | - |
+| `POST` | `/api/v1/oauth/login`     | 소셜/OAuth access token으로 로그인 | - |
 
 ### 프로필
 
@@ -187,7 +190,5 @@ Supabase Auth에서 제공하는 Apple OAuth를 그대로 사용하는 것이 �
 
 1. Supabase 대시보드 > Authentication > Providers > Apple 에서 Team ID, Services ID 등을 등록합니다.
 2. Apple Developer 콘솔에 Supabase의 Redirect URI (`https://wqdizhgmgsjzvvdiflbg.supabase.co/auth/v1/callback`) 를 등록합니다.
-3. 프런트엔드에서는 Supabase 문서의 예시처럼 `https://wqdizhgmgsjzvvdiflbg.supabase.co/auth/v1/authorize?provider=apple` 로 이동하면 됩니다. (`redirect_to` 파라미터를 사용하면 완료 후 돌아갈 URL을 지정할 수 있습니다.)
+3. 프런트엔드는 Supabase 문서에 나온 대로 `supabase.auth.signInWithOAuth({ provider: 'apple' })` 혹은 해당 authorize URL로 리다이렉트합니다. (`redirect_to` 파라미터로 완료 후 돌아갈 URL 지정)
 4. 참고: [Supabase Apple 로그인 가이드](https://supabase.com/docs/guides/auth/social-login/auth-apple?environment=server&framework=nextjs&platform=web)
-
-> `/public/apple-login.html` 페이지에 데모 버튼을 만들어 두었으니, 브라우저에서 `http://localhost:8080/public/apple-login.html` 을 열고 버튼을 누르면 위와 동일한 흐름을 브라우저에서 바로 테스트할 수 있습니다.

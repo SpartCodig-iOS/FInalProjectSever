@@ -1,92 +1,30 @@
-import {
-  BadRequestException,
-  Body,
-  Controller,
-  Delete,
-  Get,
-  HttpCode,
-  HttpStatus,
-  Post,
-  Query,
-  Req,
-  Res,
-  UnauthorizedException,
-  UseGuards,
-} from '@nestjs/common';
+import { Body, Controller, Delete, HttpCode, HttpStatus, Post, Req, UnauthorizedException, UseGuards } from '@nestjs/common';
 import {
   ApiBadRequestResponse,
   ApiBearerAuth,
   ApiBody,
   ApiOkResponse,
   ApiOperation,
-  ApiQuery,
   ApiTags,
   ApiUnauthorizedResponse,
 } from '@nestjs/swagger';
-import { Response } from 'express';
 import { AuthService } from './auth.service';
 import { success } from '../../types/api';
 import { loginSchema, refreshSchema, signupSchema } from '../../validators/authSchemas';
-import { toUserResponse } from '../../utils/mappers';
 import { AuthGuard } from '../../common/guards/auth.guard';
 import { RequestWithUser } from '../../types/request';
-import { env } from '../../config/env';
-import { OAuthStateService } from '../../services/oauthStateService';
 import {
   DeleteAccountResponseDto,
   LoginResponseDto,
   RefreshResponseDto,
   SignupResponseDto,
 } from './dto/auth-response.dto';
+import { buildAuthSessionResponse } from './auth-response.util';
 
 @ApiTags('Auth')
 @Controller('api/v1/auth')
 export class AuthController {
-  constructor(
-    private readonly authService: AuthService,
-    private readonly oauthStateService: OAuthStateService,
-  ) {}
-
-  private buildAuthSuccessResponse(
-    result: Awaited<ReturnType<AuthService['signup']>>,
-    message: string,
-  ) {
-    return success(
-      {
-        user: toUserResponse(result.user),
-        accessToken: result.tokenPair.accessToken,
-        refreshToken: result.tokenPair.refreshToken,
-        accessTokenExpiresAt: result.tokenPair.accessTokenExpiresAt.toISOString(),
-        refreshTokenExpiresAt: result.tokenPair.refreshTokenExpiresAt.toISOString(),
-        sessionId: result.session.sessionId,
-        sessionExpiresAt: result.session.expiresAt,
-        lastLoginAt: result.session.lastLoginAt,
-      },
-      message,
-    );
-  }
-
-  private buildSupabaseAppleUrl({
-    redirectTo,
-    state,
-    codeChallenge,
-  }: {
-    redirectTo?: string;
-    state?: string;
-    codeChallenge?: string;
-  }): string {
-    const base = new URL(`${env.supabaseUrl}/auth/v1/authorize`);
-    base.searchParams.set('provider', 'apple');
-    base.searchParams.set('redirect_to', redirectTo ?? env.appleRedirectUri);
-    if (state) {
-      base.searchParams.set('state', state);
-    }
-    if (codeChallenge) {
-      base.searchParams.set('code_challenge', codeChallenge);
-      base.searchParams.set('code_challenge_method', 'S256');
-    }
-    return base.toString();
-  }
+  constructor(private readonly authService: AuthService) {}
 
   @Post('signup')
   @HttpCode(HttpStatus.OK)
@@ -117,7 +55,7 @@ export class AuthController {
     const payload = signupSchema.parse(body);
     const result = await this.authService.signup(payload);
 
-    return this.buildAuthSuccessResponse(result, 'Signup successful');
+    return success(buildAuthSessionResponse(result), 'Signup successful');
   }
 
   @Post('login')
@@ -168,7 +106,7 @@ export class AuthController {
     const payload = loginSchema.parse(body);
     const result = await this.authService.login(payload);
 
-    return this.buildAuthSuccessResponse(result, 'Login successful');
+    return success(buildAuthSessionResponse(result), 'Login successful');
   }
 
   @Post('refresh')
@@ -224,82 +162,6 @@ export class AuthController {
     );
   }
 
-  @Get('apple')
-  @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: '애플 로그인 URL 반환/리다이렉트 (Supabase OAuth)' })
-  @ApiQuery({ name: 'redirectTo', required: false, description: '완료 후 돌아갈 URL (redirect_to)' })
-  @ApiQuery({ name: 'clientState', required: false, description: '클라이언트에서 전달할 state 값' })
-  @ApiQuery({
-    name: 'mode',
-    required: false,
-    description: 'redirect 지정 시 서버가 즉시 애플 로그인 페이지로 리다이렉트',
-  })
-  async appleAuthorize(
-    @Query('redirectTo') redirectTo?: string,
-    @Query('clientState') clientState?: string,
-    @Query('mode') mode?: string,
-    @Res({ passthrough: true }) res?: Response,
-  ) {
-    const { stateId, codeChallenge } = this.oauthStateService.generateState(clientState);
-    const url = this.buildSupabaseAppleUrl({
-      redirectTo,
-      state: stateId,
-      codeChallenge,
-    });
-    if (mode === 'redirect' && res) {
-      res.redirect(url);
-      return;
-    }
-    return success({ url }, 'Apple authorization URL');
-  }
-
-  @Get('apple/callback')
-  @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: '애플 로그인 콜백 처리 (Supabase OAuth code)' })
-  @ApiQuery({ name: 'code', required: true })
-  @ApiQuery({ name: 'state', required: false })
-  async appleCallback(@Query('code') code?: string, @Query('state') state?: string) {
-    if (!code) {
-      throw new BadRequestException('Missing authorization code');
-    }
-    const stored = this.oauthStateService.consumeState(state);
-    if (!stored) {
-      throw new BadRequestException('Invalid or expired state');
-    }
-    const result = await this.authService.loginWithSupabaseCode(code, stored.codeVerifier);
-    const response = this.buildAuthSuccessResponse(result, 'Apple login successful');
-    if (stored.clientState) {
-      (response.data as any).state = stored.clientState;
-    }
-    return response;
-  }
-
-  @Post('apple/callback')
-  @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: '애플 OAuth code를 서버에 전달하여 JWT 발급' })
-  @ApiBody({
-    schema: {
-      type: 'object',
-      required: ['code', 'codeVerifier'],
-      properties: {
-        code: { type: 'string', example: 'oauth-code-from-supabase' },
-        codeVerifier: { type: 'string', example: 'generated-code-verifier' },
-        state: { type: 'string', example: 'client-state', nullable: true },
-      },
-    },
-  })
-  async appleCallbackFromClient(@Body() body: { code?: string; codeVerifier?: string; state?: string }) {
-    if (!body.code || !body.codeVerifier) {
-      throw new BadRequestException('Missing authorization code or codeVerifier');
-    }
-    const result = await this.authService.loginWithSupabaseCode(body.code, body.codeVerifier);
-    const response = this.buildAuthSuccessResponse(result, 'Apple login successful');
-    if (body.state) {
-      (response.data as any).state = body.state;
-    }
-    return response;
-  }
-
   @UseGuards(AuthGuard)
   @ApiBearerAuth()
   @ApiOperation({ summary: '본인 계정 삭제 (Supabase 계정 포함)' })
@@ -331,4 +193,5 @@ export class AuthController {
       'Account deleted successfully',
     );
   }
+
 }

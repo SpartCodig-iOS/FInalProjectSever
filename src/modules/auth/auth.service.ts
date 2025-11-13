@@ -8,7 +8,7 @@ import { JwtTokenService, TokenPair } from '../../services/jwtService';
 import { SupabaseService } from '../../services/supabaseService';
 import { fromSupabaseUser } from '../../utils/mappers';
 
-interface AuthSessionPayload {
+export interface AuthSessionPayload {
   user: UserRecord;
   tokenPair: TokenPair;
   session: SessionData;
@@ -28,7 +28,7 @@ export class AuthService {
     private readonly sessionService: SessionService,
   ) {}
 
-  private buildAuthSession(user: UserRecord, loginType: LoginType): AuthSessionPayload {
+  createAuthSession(user: UserRecord, loginType: LoginType): AuthSessionPayload {
     const tokenPair = this.jwtTokenService.generateTokenPair(user, loginType);
     const session = this.sessionService.createSession(user, loginType);
     return { user, tokenPair, session, loginType };
@@ -58,7 +58,7 @@ export class AuthService {
       password_hash: passwordHash,
     };
 
-    return this.buildAuthSession(newUser, 'signup');
+    return this.createAuthSession(newUser, 'signup');
   }
 
   async login(input: LoginInput): Promise<AuthSessionPayload> {
@@ -66,6 +66,7 @@ export class AuthService {
     if (!identifier) {
       throw new UnauthorizedException('email and password are required');
     }
+
     let emailToUse = identifier;
     let loginType: LoginType = 'email';
 
@@ -73,24 +74,25 @@ export class AuthService {
       let profile;
       try {
         profile = await this.supabaseService.findProfileByIdentifier(identifier);
-      } catch (error) {
+      } catch {
         throw new UnauthorizedException('Invalid credentials');
       }
       if (!profile?.email) {
         throw new UnauthorizedException('Invalid credentials');
       }
       emailToUse = profile.email.toLowerCase();
+      loginType = 'username';
     }
 
     let supabaseUser;
     try {
       supabaseUser = await this.supabaseService.signIn(emailToUse, input.password);
-    } catch (error) {
+    } catch {
       throw new UnauthorizedException('Invalid credentials');
     }
     const user = fromSupabaseUser(supabaseUser);
 
-    return this.buildAuthSession(user, loginType);
+    return this.createAuthSession(user, loginType);
   }
 
   async refresh(refreshToken: string): Promise<RefreshPayload> {
@@ -110,10 +112,8 @@ export class AuthService {
       throw new UnauthorizedException('User verification failed');
     }
 
-    const tokenPair = this.jwtTokenService.generateTokenPair(user, 'email');
-    const session = this.sessionService.createSession(user, 'email');
-
-    return { tokenPair, session };
+    const sessionPayload = this.createAuthSession(user, 'email');
+    return { tokenPair: sessionPayload.tokenPair, session: sessionPayload.session };
   }
 
   async deleteAccount(user: UserRecord): Promise<{ supabaseDeleted: boolean }> {
@@ -131,12 +131,4 @@ export class AuthService {
     return { supabaseDeleted };
   }
 
-  async loginWithSupabaseCode(code: string, codeVerifier: string): Promise<AuthSessionPayload> {
-    const session = await this.supabaseService.exchangeCodeForSession(code, codeVerifier);
-    if (!session.user) {
-      throw new UnauthorizedException('Supabase session does not include a user');
-    }
-    const user = fromSupabaseUser(session.user);
-    return this.buildAuthSession(user, 'apple');
-  }
 }
