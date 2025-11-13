@@ -28,6 +28,12 @@ export class AuthService {
     private readonly sessionService: SessionService,
   ) {}
 
+  private buildAuthSession(user: UserRecord, loginType: LoginType): AuthSessionPayload {
+    const tokenPair = this.jwtTokenService.generateTokenPair(user, loginType);
+    const session = this.sessionService.createSession(user, loginType);
+    return { user, tokenPair, session, loginType };
+  }
+
   async signup(input: SignupInput): Promise<AuthSessionPayload> {
     const lowerEmail = input.email.toLowerCase();
     const supabaseUser = await this.supabaseService.signUp(lowerEmail, input.password, {
@@ -52,11 +58,7 @@ export class AuthService {
       password_hash: passwordHash,
     };
 
-    const loginType: LoginType = 'signup';
-    const tokenPair = this.jwtTokenService.generateTokenPair(newUser, loginType);
-    const session = this.sessionService.createSession(newUser, loginType);
-
-    return { user: newUser, tokenPair, session, loginType };
+    return this.buildAuthSession(newUser, 'signup');
   }
 
   async login(input: LoginInput): Promise<AuthSessionPayload> {
@@ -88,10 +90,7 @@ export class AuthService {
     }
     const user = fromSupabaseUser(supabaseUser);
 
-    const tokenPair = this.jwtTokenService.generateTokenPair(user, loginType);
-    const session = this.sessionService.createSession(user, loginType);
-
-    return { user, tokenPair, session, loginType };
+    return this.buildAuthSession(user, loginType);
   }
 
   async refresh(refreshToken: string): Promise<RefreshPayload> {
@@ -130,5 +129,14 @@ export class AuthService {
     }
 
     return { supabaseDeleted };
+  }
+
+  async loginWithSupabaseCode(code: string): Promise<AuthSessionPayload> {
+    const session = await this.supabaseService.exchangeCodeForSession(code);
+    if (!session.user) {
+      throw new UnauthorizedException('Supabase session does not include a user');
+    }
+    const user = fromSupabaseUser(session.user);
+    return this.buildAuthSession(user, 'apple');
   }
 }

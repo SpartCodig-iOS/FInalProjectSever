@@ -25,6 +25,11 @@ let AuthService = class AuthService {
         this.jwtTokenService = jwtTokenService;
         this.sessionService = sessionService;
     }
+    buildAuthSession(user, loginType) {
+        const tokenPair = this.jwtTokenService.generateTokenPair(user, loginType);
+        const session = this.sessionService.createSession(user, loginType);
+        return { user, tokenPair, session, loginType };
+    }
     async signup(input) {
         const lowerEmail = input.email.toLowerCase();
         const supabaseUser = await this.supabaseService.signUp(lowerEmail, input.password, {
@@ -45,10 +50,7 @@ let AuthService = class AuthService {
             username,
             password_hash: passwordHash,
         };
-        const loginType = 'signup';
-        const tokenPair = this.jwtTokenService.generateTokenPair(newUser, loginType);
-        const session = this.sessionService.createSession(newUser, loginType);
-        return { user: newUser, tokenPair, session, loginType };
+        return this.buildAuthSession(newUser, 'signup');
     }
     async login(input) {
         const identifier = input.identifier.trim().toLowerCase();
@@ -78,9 +80,7 @@ let AuthService = class AuthService {
             throw new common_1.UnauthorizedException('Invalid credentials');
         }
         const user = (0, mappers_1.fromSupabaseUser)(supabaseUser);
-        const tokenPair = this.jwtTokenService.generateTokenPair(user, loginType);
-        const session = this.sessionService.createSession(user, loginType);
-        return { user, tokenPair, session, loginType };
+        return this.buildAuthSession(user, loginType);
     }
     async refresh(refreshToken) {
         const payload = this.jwtTokenService.verifyRefreshToken(refreshToken);
@@ -115,6 +115,14 @@ let AuthService = class AuthService {
             }
         }
         return { supabaseDeleted };
+    }
+    async loginWithSupabaseCode(code) {
+        const session = await this.supabaseService.exchangeCodeForSession(code);
+        if (!session.user) {
+            throw new common_1.UnauthorizedException('Supabase session does not include a user');
+        }
+        const user = (0, mappers_1.fromSupabaseUser)(session.user);
+        return this.buildAuthSession(user, 'apple');
     }
 };
 exports.AuthService = AuthService;

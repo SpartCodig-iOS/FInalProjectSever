@@ -1,5 +1,5 @@
 import { Injectable, ServiceUnavailableException } from '@nestjs/common';
-import { createClient, SupabaseClient, User } from '@supabase/supabase-js';
+import { createClient, Session, SupabaseClient, User } from '@supabase/supabase-js';
 import { env } from '../config/env';
 
 @Injectable()
@@ -158,5 +158,16 @@ export class SupabaseService {
       console.error('[health] Supabase health check exception', error);
       return 'unavailable';
     }
+  }
+
+  async exchangeCodeForSession(code: string): Promise<Session> {
+    const client = this.getClient();
+    const { data, error } = await client.auth.exchangeCodeForSession(code);
+    if (error || !data?.session) {
+      throw new ServiceUnavailableException(
+        `[exchangeCodeForSession] ${error?.message || 'Missing session'}`,
+      );
+    }
+    return data.session;
   }
 }

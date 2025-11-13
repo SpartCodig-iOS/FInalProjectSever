@@ -60,6 +60,14 @@ Nest 앱 엔트리포인트는 `src/main.ts`, 프로덕션은 `node dist/main.js
 
 서버는 Admin API 로 사용자 생성/삭제를 수행하고 `profiles` 테이블을 동기화합니다.
 
+### Supabase + Apple 로그인
+
+- Supabase Auth의 애플 OAuth 흐름을 그대로 사용합니다. `/api/v1/auth/apple` 는 Supabase `authorize?provider=apple` URL을 생성해 주고, `mode=redirect` 파라미터를 사용하면 즉시 애플 로그인 페이지로 이동합니다.
+- 애플 로그인 완료 후 Supabase가 전달한 `code`를 `/api/v1/auth/apple/callback` (GET 또는 POST) 에서 처리하여 기존과 동일한 JWT/세션 응답을 내려줍니다. 프런트엔드에서 Supabase authorize 호출 시 `redirect_to=http://localhost:8080/api/v1/auth/apple/callback` 과 같이 서버 콜백 URL을 지정하면 됩니다.
+- 공식 문서: [Supabase Apple 로그인 가이드](https://supabase.com/docs/guides/auth/social-login/auth-apple?environment=server&framework=nextjs&platform=web)
+- 브라우저에서 `http://localhost:8080/public/apple-login.html` 페이지를 열고 버튼을 누르면 위의 흐름을 바로 테스트할 수 있습니다.
+- 모바일/웹 앱에서 직접 code를 받은 뒤 서버에 전달하려면 `POST /api/v1/auth/apple/callback` 의 Body `{ code, state? }` 를 호출하면 됩니다. 서버가 Supabase에 `exchangeCodeForSession` 요청을 대신 보내고 JWT/세션을 응답해 줍니다.
+
 ---
 
 ## 📜 Swagger 문서
@@ -86,6 +94,9 @@ Nest 앱 엔트리포인트는 `src/main.ts`, 프로덕션은 `node dist/main.js
 | `POST` | `/api/v1/auth/login`      | 로그인 (이메일/아이디) | - |
 | `POST` | `/api/v1/auth/refresh`    | 토큰 재발급        | Refresh Token |
 | `DELETE` | `/api/v1/auth/account`  | 계정 삭제 (Supabase 포함) | Bearer |
+| `GET` | `/api/v1/auth/apple` | 애플 로그인 URL (Supabase OAuth) | - |
+| `GET` | `/api/v1/auth/apple/callback` | 애플 로그인 콜백 처리 | - |
+| `POST` | `/api/v1/auth/apple/callback` | 애플 OAuth code → JWT 발급 | - |
 
 ### 프로필
 
@@ -166,3 +177,15 @@ docker run -p 8080:8080 --env-file .env sparta-final
 ---
 
 이제 전체 서버는 Nest.js 로 동작하며, 기존 API 계약과 응답 포맷은 그대로 유지됩니다.
+
+
+### 소셜 로그인(애플)
+
+Supabase Auth에서 제공하는 Apple OAuth를 그대로 사용하는 것이 가장 간단합니다. 아래 순서를 따르면 됩니다.
+
+1. Supabase 대시보드 > Authentication > Providers > Apple 에서 Team ID, Services ID 등을 등록합니다.
+2. Apple Developer 콘솔에 Supabase의 Redirect URI (`https://wqdizhgmgsjzvvdiflbg.supabase.co/auth/v1/callback`) 를 등록합니다.
+3. 프런트엔드에서는 Supabase 문서의 예시처럼 `https://wqdizhgmgsjzvvdiflbg.supabase.co/auth/v1/authorize?provider=apple` 로 이동하면 됩니다. (`redirect_to` 파라미터를 사용하면 완료 후 돌아갈 URL을 지정할 수 있습니다.)
+4. 참고: [Supabase Apple 로그인 가이드](https://supabase.com/docs/guides/auth/social-login/auth-apple?environment=server&framework=nextjs&platform=web)
+
+> `/public/apple-login.html` 페이지에 데모 버튼을 만들어 두었으니, 브라우저에서 `http://localhost:8080/public/apple-login.html` 을 열고 버튼을 누르면 위와 동일한 흐름을 브라우저에서 바로 테스트할 수 있습니다.

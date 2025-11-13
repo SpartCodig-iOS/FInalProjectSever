@@ -1,19 +1,36 @@
-import { Body, Controller, Delete, HttpCode, HttpStatus, Post, Req, UnauthorizedException, UseGuards } from '@nestjs/common';
+import {
+  BadRequestException,
+  Body,
+  Controller,
+  Delete,
+  Get,
+  HttpCode,
+  HttpStatus,
+  Post,
+  Query,
+  Req,
+  Res,
+  UnauthorizedException,
+  UseGuards,
+} from '@nestjs/common';
 import {
   ApiBadRequestResponse,
   ApiBearerAuth,
   ApiBody,
   ApiOkResponse,
   ApiOperation,
+  ApiQuery,
   ApiTags,
   ApiUnauthorizedResponse,
 } from '@nestjs/swagger';
+import { Response } from 'express';
 import { AuthService } from './auth.service';
 import { success } from '../../types/api';
 import { loginSchema, refreshSchema, signupSchema } from '../../validators/authSchemas';
 import { toUserResponse } from '../../utils/mappers';
 import { AuthGuard } from '../../common/guards/auth.guard';
 import { RequestWithUser } from '../../types/request';
+import { env } from '../../config/env';
 import {
   DeleteAccountResponseDto,
   LoginResponseDto,
@@ -25,6 +42,37 @@ import {
 @Controller('api/v1/auth')
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
+
+  private buildAuthSuccessResponse(
+    result: Awaited<ReturnType<AuthService['signup']>>,
+    message: string,
+  ) {
+    return success(
+      {
+        user: toUserResponse(result.user),
+        accessToken: result.tokenPair.accessToken,
+        refreshToken: result.tokenPair.refreshToken,
+        accessTokenExpiresAt: result.tokenPair.accessTokenExpiresAt.toISOString(),
+        refreshTokenExpiresAt: result.tokenPair.refreshTokenExpiresAt.toISOString(),
+        sessionId: result.session.sessionId,
+        sessionExpiresAt: result.session.expiresAt,
+        lastLoginAt: result.session.lastLoginAt,
+      },
+      message,
+    );
+  }
+
+  private buildSupabaseAppleUrl(redirectTo?: string, state?: string): string {
+    const base = new URL(`${env.supabaseUrl}/auth/v1/authorize`);
+    base.searchParams.set('provider', 'apple');
+    if (redirectTo) {
+      base.searchParams.set('redirect_to', redirectTo);
+    }
+    if (state) {
+      base.searchParams.set('state', state);
+    }
+    return base.toString();
+  }
 
   @Post('signup')
   @HttpCode(HttpStatus.OK)
@@ -55,18 +103,7 @@ export class AuthController {
     const payload = signupSchema.parse(body);
     const result = await this.authService.signup(payload);
 
-    return success(
-      {
-        user: toUserResponse(result.user),
-        accessToken: result.tokenPair.accessToken,
-        refreshToken: result.tokenPair.refreshToken,
-        accessTokenExpiresAt: result.tokenPair.accessTokenExpiresAt.toISOString(),
-        refreshTokenExpiresAt: result.tokenPair.refreshTokenExpiresAt.toISOString(),
-        sessionId: result.session.sessionId,
-        sessionExpiresAt: result.session.expiresAt,
-      },
-      'Signup successful',
-    );
+    return this.buildAuthSuccessResponse(result, 'Signup successful');
   }
 
   @Post('login')
@@ -117,19 +154,7 @@ export class AuthController {
     const payload = loginSchema.parse(body);
     const result = await this.authService.login(payload);
 
-    return success(
-      {
-        user: toUserResponse(result.user),
-        accessToken: result.tokenPair.accessToken,
-        refreshToken: result.tokenPair.refreshToken,
-        accessTokenExpiresAt: result.tokenPair.accessTokenExpiresAt.toISOString(),
-        refreshTokenExpiresAt: result.tokenPair.refreshTokenExpiresAt.toISOString(),
-        sessionId: result.session.sessionId,
-        sessionExpiresAt: result.session.expiresAt,
-        lastLoginAt: result.session.lastLoginAt,
-      },
-      'Login successful',
-    );
+    return this.buildAuthSuccessResponse(result, 'Login successful');
   }
 
   @Post('refresh')
@@ -183,6 +208,72 @@ export class AuthController {
       },
       'Token refreshed successfully',
     );
+  }
+
+  @Get('apple')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: '애플 로그인 URL 반환/리다이렉트 (Supabase OAuth)' })
+  @ApiQuery({ name: 'redirectTo', required: false, description: '완료 후 돌아갈 URL (redirect_to)' })
+  @ApiQuery({ name: 'state', required: false })
+  @ApiQuery({
+    name: 'mode',
+    required: false,
+    description: 'redirect 지정 시 서버가 즉시 애플 로그인 페이지로 리다이렉트',
+  })
+  async appleAuthorize(
+    @Query('redirectTo') redirectTo?: string,
+    @Query('state') state?: string,
+    @Query('mode') mode?: string,
+    @Res({ passthrough: true }) res?: Response,
+  ) {
+    const url = this.buildSupabaseAppleUrl(redirectTo, state);
+    if (mode === 'redirect' && res) {
+      res.redirect(url);
+      return;
+    }
+    return success({ url }, 'Apple authorization URL');
+  }
+
+  @Get('apple/callback')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: '애플 로그인 콜백 처리 (Supabase OAuth code)' })
+  @ApiQuery({ name: 'code', required: true })
+  @ApiQuery({ name: 'state', required: false })
+  async appleCallback(@Query('code') code?: string, @Query('state') state?: string) {
+    if (!code) {
+      throw new BadRequestException('Missing authorization code');
+    }
+    const result = await this.authService.loginWithSupabaseCode(code);
+    const response = this.buildAuthSuccessResponse(result, 'Apple login successful');
+    if (state) {
+      (response.data as any).state = state;
+    }
+    return response;
+  }
+
+  @Post('apple/callback')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: '애플 OAuth code를 서버에 전달하여 JWT 발급' })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      required: ['code'],
+      properties: {
+        code: { type: 'string', example: 'oauth-code-from-supabase' },
+        state: { type: 'string', example: 'client-state', nullable: true },
+      },
+    },
+  })
+  async appleCallbackFromClient(@Body() body: { code?: string; state?: string }) {
+    if (!body.code) {
+      throw new BadRequestException('Missing authorization code');
+    }
+    const result = await this.authService.loginWithSupabaseCode(body.code);
+    const response = this.buildAuthSuccessResponse(result, 'Apple login successful');
+    if (body.state) {
+      (response.data as any).state = body.state;
+    }
+    return response;
   }
 
   @UseGuards(AuthGuard)

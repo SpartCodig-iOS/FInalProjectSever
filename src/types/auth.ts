@@ -1,6 +1,6 @@
 import { UserResponseDto } from './user';
 
-export type LoginType = 'email' | 'username' | 'signup';
+export type LoginType = 'email' | 'username' | 'signup' | 'apple';
 
 export interface AuthResponseDto {
   user: UserResponseDto;

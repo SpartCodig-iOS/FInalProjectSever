@@ -149,6 +149,14 @@ let SupabaseService = class SupabaseService {
             return 'unavailable';
         }
     }
+    async exchangeCodeForSession(code) {
+        const client = this.getClient();
+        const { data, error } = await client.auth.exchangeCodeForSession(code);
+        if (error || !data?.session) {
+            throw new common_1.ServiceUnavailableException(`[exchangeCodeForSession] ${error?.message || 'Missing session'}`);
+        }
+        return data.session;
+    }
 };
 exports.SupabaseService = SupabaseService;
 exports.SupabaseService = SupabaseService = __decorate([

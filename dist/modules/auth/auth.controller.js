@@ -20,27 +20,13 @@ const api_1 = require("../../types/api");
 const authSchemas_1 = require("../../validators/authSchemas");
 const mappers_1 = require("../../utils/mappers");
 const auth_guard_1 = require("../../common/guards/auth.guard");
+const env_1 = require("../../config/env");
 const auth_response_dto_1 = require("./dto/auth-response.dto");
 let AuthController = class AuthController {
     constructor(authService) {
         this.authService = authService;
     }
-    async signup(body) {
-        const payload = authSchemas_1.signupSchema.parse(body);
-        const result = await this.authService.signup(payload);
-        return (0, api_1.success)({
-            user: (0, mappers_1.toUserResponse)(result.user),
-            accessToken: result.tokenPair.accessToken,
-            refreshToken: result.tokenPair.refreshToken,
-            accessTokenExpiresAt: result.tokenPair.accessTokenExpiresAt.toISOString(),
-            refreshTokenExpiresAt: result.tokenPair.refreshTokenExpiresAt.toISOString(),
-            sessionId: result.session.sessionId,
-            sessionExpiresAt: result.session.expiresAt,
-        }, 'Signup successful');
-    }
-    async login(body) {
-        const payload = authSchemas_1.loginSchema.parse(body);
-        const result = await this.authService.login(payload);
+    buildAuthSuccessResponse(result, message) {
         return (0, api_1.success)({
             user: (0, mappers_1.toUserResponse)(result.user),
             accessToken: result.tokenPair.accessToken,
@@ -50,7 +36,28 @@ let AuthController = class AuthController {
             sessionId: result.session.sessionId,
             sessionExpiresAt: result.session.expiresAt,
             lastLoginAt: result.session.lastLoginAt,
-        }, 'Login successful');
+        }, message);
+    }
+    buildSupabaseAppleUrl(redirectTo, state) {
+        const base = new URL(`${env_1.env.supabaseUrl}/auth/v1/authorize`);
+        base.searchParams.set('provider', 'apple');
+        if (redirectTo) {
+            base.searchParams.set('redirect_to', redirectTo);
+        }
+        if (state) {
+            base.searchParams.set('state', state);
+        }
+        return base.toString();
+    }
+    async signup(body) {
+        const payload = authSchemas_1.signupSchema.parse(body);
+        const result = await this.authService.signup(payload);
+        return this.buildAuthSuccessResponse(result, 'Signup successful');
+    }
+    async login(body) {
+        const payload = authSchemas_1.loginSchema.parse(body);
+        const result = await this.authService.login(payload);
+        return this.buildAuthSuccessResponse(result, 'Login successful');
     }
     async refresh(body) {
         const payload = authSchemas_1.refreshSchema.parse(body);
@@ -63,6 +70,36 @@ let AuthController = class AuthController {
             sessionId: result.session.sessionId,
             sessionExpiresAt: result.session.expiresAt,
         }, 'Token refreshed successfully');
+    }
+    async appleAuthorize(redirectTo, state, mode, res) {
+        const url = this.buildSupabaseAppleUrl(redirectTo, state);
+        if (mode === 'redirect' && res) {
+            res.redirect(url);
+            return;
+        }
+        return (0, api_1.success)({ url }, 'Apple authorization URL');
+    }
+    async appleCallback(code, state) {
+        if (!code) {
+            throw new common_1.BadRequestException('Missing authorization code');
+        }
+        const result = await this.authService.loginWithSupabaseCode(code);
+        const response = this.buildAuthSuccessResponse(result, 'Apple login successful');
+        if (state) {
+            response.data.state = state;
+        }
+        return response;
+    }
+    async appleCallbackFromClient(body) {
+        if (!body.code) {
+            throw new common_1.BadRequestException('Missing authorization code');
+        }
+        const result = await this.authService.loginWithSupabaseCode(body.code);
+        const response = this.buildAuthSuccessResponse(result, 'Apple login successful');
+        if (body.state) {
+            response.data.state = body.state;
+        }
+        return response;
     }
     async deleteAccount(req) {
         const currentUser = req.currentUser;
@@ -200,6 +237,56 @@ __decorate([
     __metadata("design:paramtypes", [Object]),
     __metadata("design:returntype", Promise)
 ], AuthController.prototype, "refresh", null);
+__decorate([
+    (0, common_1.Get)('apple'),
+    (0, common_1.HttpCode)(common_1.HttpStatus.OK),
+    (0, swagger_1.ApiOperation)({ summary: '애플 로그인 URL 반환/리다이렉트 (Supabase OAuth)' }),
+    (0, swagger_1.ApiQuery)({ name: 'redirectTo', required: false, description: '완료 후 돌아갈 URL (redirect_to)' }),
+    (0, swagger_1.ApiQuery)({ name: 'state', required: false }),
+    (0, swagger_1.ApiQuery)({
+        name: 'mode',
+        required: false,
+        description: 'redirect 지정 시 서버가 즉시 애플 로그인 페이지로 리다이렉트',
+    }),
+    __param(0, (0, common_1.Query)('redirectTo')),
+    __param(1, (0, common_1.Query)('state')),
+    __param(2, (0, common_1.Query)('mode')),
+    __param(3, (0, common_1.Res)({ passthrough: true })),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String, String, String, Object]),
+    __metadata("design:returntype", Promise)
+], AuthController.prototype, "appleAuthorize", null);
+__decorate([
+    (0, common_1.Get)('apple/callback'),
+    (0, common_1.HttpCode)(common_1.HttpStatus.OK),
+    (0, swagger_1.ApiOperation)({ summary: '애플 로그인 콜백 처리 (Supabase OAuth code)' }),
+    (0, swagger_1.ApiQuery)({ name: 'code', required: true }),
+    (0, swagger_1.ApiQuery)({ name: 'state', required: false }),
+    __param(0, (0, common_1.Query)('code')),
+    __param(1, (0, common_1.Query)('state')),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String, String]),
+    __metadata("design:returntype", Promise)
+], AuthController.prototype, "appleCallback", null);
+__decorate([
+    (0, common_1.Post)('apple/callback'),
+    (0, common_1.HttpCode)(common_1.HttpStatus.OK),
+    (0, swagger_1.ApiOperation)({ summary: '애플 OAuth code를 서버에 전달하여 JWT 발급' }),
+    (0, swagger_1.ApiBody)({
+        schema: {
+            type: 'object',
+            required: ['code'],
+            properties: {
+                code: { type: 'string', example: 'oauth-code-from-supabase' },
+                state: { type: 'string', example: 'client-state', nullable: true },
+            },
+        },
+    }),
+    __param(0, (0, common_1.Body)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object]),
+    __metadata("design:returntype", Promise)
+], AuthController.prototype, "appleCallbackFromClient", null);
 __decorate([
     (0, common_1.UseGuards)(auth_guard_1.AuthGuard),
     (0, swagger_1.ApiBearerAuth)(),
