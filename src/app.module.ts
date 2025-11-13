@@ -1,0 +1,16 @@
+import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
+import { SharedModule } from './modules/shared/shared.module';
+import { AuthModule } from './modules/auth/auth.module';
+import { ProfileModule } from './modules/profile/profile.module';
+import { SessionModule } from './modules/session/session.module';
+import { HealthModule } from './modules/health/health.module';
+import { RequestLoggerMiddleware } from './middleware/requestLogger';
+
+@Module({
+  imports: [SharedModule, AuthModule, ProfileModule, SessionModule, HealthModule],
+})
+export class AppModule implements NestModule {
+  configure(consumer: MiddlewareConsumer) {
+    consumer.apply(RequestLoggerMiddleware).forRoutes('*');
+  }
+}

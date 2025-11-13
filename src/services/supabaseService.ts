@@ -1,27 +1,42 @@
-import { createClient, SupabaseClient } from '@supabase/supabase-js';
+import { Injectable, ServiceUnavailableException } from '@nestjs/common';
+import { createClient, SupabaseClient, User } from '@supabase/supabase-js';
 import { env } from '../config/env';
 
-let cachedClient: SupabaseClient | null = null;
+@Injectable()
+export class SupabaseService {
+  private client: SupabaseClient | null = null;
 
-const getClient = (): SupabaseClient => {
-  if (cachedClient) {
-    return cachedClient;
-  }
-  if (!env.supabaseUrl || !env.supabaseServiceRoleKey) {
-    throw new Error('Supabase credentials are not configured. Set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY.');
-  }
-  cachedClient = createClient(env.supabaseUrl, env.supabaseServiceRoleKey, {
-    auth: {
-      autoRefreshToken: false,
-      persistSession: false,
-    },
-  });
-  return cachedClient;
-};
+  constructor() {
+    if (!env.supabaseUrl || !env.supabaseServiceRoleKey) {
+      console.warn(
+        '[SupabaseService] SUPABASE_URL 또는 SUPABASE_SERVICE_ROLE_KEY가 설정되어 있지 않습니다.',
+      );
+      return;
+    }
 
-export const supabaseService = {
-  async signUp(email: string, password: string, metadata: Record<string, string>) {
-    const client = getClient();
+    this.client = createClient(env.supabaseUrl, env.supabaseServiceRoleKey, {
+      auth: {
+        autoRefreshToken: false,
+        persistSession: false,
+      },
+    });
+  }
+
+  isConfigured(): boolean {
+    return Boolean(this.client);
+  }
+
+  private getClient(): SupabaseClient {
+    if (!this.client) {
+      throw new ServiceUnavailableException(
+        'Supabase admin client is not configured (missing env vars)',
+      );
+    }
+    return this.client;
+  }
+
+  async signUp(email: string, password: string, metadata: Record<string, string | undefined>) {
+    const client = this.getClient();
     const { data, error } = await client.auth.admin.createUser({
       email,
       password,
@@ -30,24 +45,49 @@ export const supabaseService = {
     });
     if (error) throw error;
     return data.user;
-  },
+  }
 
-  async signIn(email: string, password: string) {
-    const client = getClient();
+  async signIn(email: string, password: string): Promise<User> {
+    const client = this.getClient();
     const { data, error } = await client.auth.signInWithPassword({ email, password });
     if (error) throw error;
-    return data.session;
-  },
+    if (!data.user) {
+      throw new ServiceUnavailableException('Supabase signIn returned no user');
+    }
+    return data.user;
+  }
 
   async getUserFromToken(token: string) {
-    const client = getClient();
+    const client = this.getClient();
     const { data, error } = await client.auth.getUser(token);
     if (error) throw error;
     return data.user;
-  },
+  }
+
+  async getUserById(id: string) {
+    const client = this.getClient();
+    const { data, error } = await client.auth.admin.getUserById(id);
+    if (error) throw error;
+    return data.user;
+  }
+
+  async findProfileByIdentifier(identifier: string) {
+    const client = this.getClient();
+    const { data, error } = await client
+      .from(env.supabaseProfileTable)
+      .select('email, username')
+      .or(`username.eq.${identifier},email.ilike.${identifier}@%`)
+      .maybeSingle();
+
+    if (error) {
+      throw error;
+    }
+
+    return data;
+  }
 
   async upsertProfile(params: { id: string; email: string; name?: string | null; username: string }) {
-    const client = getClient();
+    const client = this.getClient();
     const now = new Date().toISOString();
     const payload = {
       id: params.id,
@@ -57,46 +97,36 @@ export const supabaseService = {
       created_at: now,
       updated_at: now,
     };
-    const { error } = await client
-      .from(env.supabaseProfileTable)
-      .upsert(payload, { onConflict: 'id' });
+    const { error } = await client.from(env.supabaseProfileTable).upsert(payload, { onConflict: 'id' });
     if (error) throw error;
-  },
+  }
 
   async deleteUser(id: string) {
-    const client = getClient();
+    const client = this.getClient();
 
-    // 0) Validate the user exists (clear error if not)
     const { data: userLookup, error: lookupError } = await client.auth.admin.getUserById(id);
     if (lookupError) {
       throw new Error(`[deleteUser] admin.getUserById failed: ${lookupError.message}`);
     }
     if (!userLookup?.user) {
-      // No such user in Auth: best-effort cleanup of profile row, then return
       await client.from(env.supabaseProfileTable).delete().eq('id', id);
       return;
     }
 
-    // 1) Delete from profiles (and other user-owned tables, if any) first
-    const { error: profileError } = await client
-      .from(env.supabaseProfileTable)
-      .delete()
-      .eq('id', id);
+    const { error: profileError } = await client.from(env.supabaseProfileTable).delete().eq('id', id);
     if (profileError) {
       throw new Error(`[deleteUser] profile delete failed: ${profileError.message}`);
     }
 
-    // 2) Finally, delete the Auth user via Admin API
     const { error: userError } = await client.auth.admin.deleteUser(id);
     if (userError) {
       throw new Error(`[deleteUser] admin.deleteUser failed: ${userError.message}`);
     }
-  },
+  }
 
   async deleteUserByToken(token: string) {
-    const client = getClient();
+    const client = this.getClient();
 
-    // getUser with JWT (server-side) to resolve the user id
     const { data, error } = await client.auth.getUser(token);
     if (error) {
       throw new Error(`[deleteUserByToken] getUser failed: ${error.message}`);
@@ -106,7 +136,27 @@ export const supabaseService = {
       throw new Error('[deleteUserByToken] No user found for provided token');
     }
 
-    // Reuse the hard-delete path
     await this.deleteUser(userId);
-  },
-};
+  }
+
+  async checkProfilesHealth(): Promise<'ok' | 'unavailable' | 'not_configured'> {
+    if (!this.client) {
+      return 'not_configured';
+    }
+
+    try {
+      const { error } = await this.client
+        .from(env.supabaseProfileTable)
+        .select('id', { head: true, count: 'exact' });
+
+      if (error) {
+        console.error('[health] Supabase health check error', error);
+        return 'unavailable';
+      }
+      return 'ok';
+    } catch (error) {
+      console.error('[health] Supabase health check exception', error);
+      return 'unavailable';
+    }
+  }
+}
