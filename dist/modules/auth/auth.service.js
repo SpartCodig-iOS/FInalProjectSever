@@ -124,6 +124,14 @@ let AuthService = class AuthService {
                 console.warn('[deleteAccount] Apple revoke failed', error);
             }
         }
+        else if (profileLoginType === 'google') {
+            try {
+                await this.socialAuthService.revokeGoogleConnection(user.id);
+            }
+            catch (error) {
+                console.warn('[deleteAccount] Google revoke failed', error);
+            }
+        }
         let supabaseDeleted = false;
         try {
             await this.supabaseService.deleteUser(user.id);

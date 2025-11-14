@@ -46,6 +46,9 @@ export const env = {
   appleTeamId: process.env.APPLE_TEAM_ID ?? null,
   appleKeyId: process.env.APPLE_KEY_ID ?? null,
   applePrivateKey: process.env.APPLE_PRIVATE_KEY ?? null,
+  googleClientId: process.env.GOOGLE_CLIENT_ID ?? null,
+  googleClientSecret: process.env.GOOGLE_CLIENT_SECRET ?? null,
+  googleRedirectUri: process.env.GOOGLE_REDIRECT_URI ?? null,
 };
 
 export const isProduction = env.nodeEnv === 'production';

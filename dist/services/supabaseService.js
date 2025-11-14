@@ -159,6 +159,31 @@ let SupabaseService = class SupabaseService {
         }
         return data?.apple_refresh_token ?? null;
     }
+    async saveGoogleRefreshToken(userId, refreshToken) {
+        const client = this.getClient();
+        const { error } = await client
+            .from(env_1.env.supabaseProfileTable)
+            .update({
+            google_refresh_token: refreshToken,
+            updated_at: new Date().toISOString(),
+        })
+            .eq('id', userId);
+        if (error) {
+            throw new Error(`[saveGoogleRefreshToken] update failed: ${error.message}`);
+        }
+    }
+    async getGoogleRefreshToken(userId) {
+        const client = this.getClient();
+        const { data, error } = await client
+            .from(env_1.env.supabaseProfileTable)
+            .select('google_refresh_token')
+            .eq('id', userId)
+            .maybeSingle();
+        if (error) {
+            throw new Error(`[getGoogleRefreshToken] select failed: ${error.message}`);
+        }
+        return data?.google_refresh_token ?? null;
+    }
     async deleteUser(id) {
         const client = this.getClient();
         const { data: userLookup, error: lookupError } = await client.auth.admin.getUserById(id);

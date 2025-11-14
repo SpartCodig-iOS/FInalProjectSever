@@ -61,6 +61,9 @@ Nest 앱 엔트리포인트는 `src/main.ts`, 프로덕션은 `node dist/main.js
 | `APPLE_TEAM_ID`             | Apple Team ID                            |
 | `APPLE_KEY_ID`              | Apple private key ID                     |
 | `APPLE_PRIVATE_KEY`         | Apple `.p8` 개인키 (줄바꿈은 `\n` 혹은 multiline) |
+| `GOOGLE_CLIENT_ID`          | Google OAuth Client ID (웹/모바일)       |
+| `GOOGLE_CLIENT_SECRET`      | Google OAuth Client Secret               |
+| `GOOGLE_REDIRECT_URI`       | Google OAuth redirect URI (기본값)       |
 
 서버는 Admin API 로 사용자 생성/삭제를 수행하고 `profiles` 테이블을 동기화합니다.
 
@@ -68,10 +71,10 @@ Nest 앱 엔트리포인트는 `src/main.ts`, 프로덕션은 `node dist/main.js
 
 - 클라이언트(웹/모바일)에서 Supabase Auth SDK를 사용해 애플/구글 등 소셜 로그인을 수행하고, Supabase access token(JWT)을 발급받습니다.
 - 로그인 전 분기 처리가 필요하면 `POST /api/v1/oauth/lookup` 으로 `{ accessToken, loginType? }` 를 보내 가입 여부(`registered` Boolean만 반환)를 확인하세요. true면 즉시 로그인 가능, false면 추가 약관/닉네임 입력 플로우를 띄울 수 있습니다.
-- 소셜 로그인 이후 서버 세션/JWT가 필요하면 `POST /api/v1/oauth/signup` 또는 `POST /api/v1/oauth/login` 에 `{ accessToken, loginType?, appleRefreshToken?, authorizationCode? }` 를 전송하세요. 애플 최초 가입 시 Supabase가 `provider_refresh_token` 을 주지 않는다면 `authorizationCode` 를 넘겨주면 서버가 Apple 토큰 교환을 통해 refresh token을 확보하여 저장합니다.
+- 소셜 로그인 이후 서버 세션/JWT가 필요하면 `POST /api/v1/oauth/signup` 또는 `POST /api/v1/oauth/login` 에 `{ accessToken, loginType?, appleRefreshToken?, googleRefreshToken?, authorizationCode?, codeVerifier?, redirectUri? }` 를 전송하세요. 애플/구글 최초 가입 시 Supabase가 `provider_refresh_token` 을 주지 않는다면 `authorizationCode` 와 (필요 시) `codeVerifier`, `redirectUri` 를 넘겨주면 서버가 각 Provider 토큰 교환을 통해 refresh token을 확보하여 저장합니다.
 - 애플 로그인 연결 해제 시에는 Apple에서 내려준 `refresh_token`(또는 authorization code)을 앱이 보관했다가 `POST /api/v1/oauth/apple/revoke` 로 전달해야 합니다. 서버가 Apple `auth/revoke` 엔드포인트를 호출해 연결을 끊고, 해당 사용자 프로필 상태를 갱신할 수 있습니다.
 - 일반 이메일/비밀번호 로그인은 `POST /api/v1/auth/login` 에 `{ identifier/email, password }` 를 전달하면 됩니다.
-- `DELETE /api/v1/auth/account` 를 호출하면, 로그인 타입이 `apple` 인 경우 서버가 먼저 `/api/v1/oauth/apple/revoke` 를 내부적으로 실행하여 애플 연결을 끊고, 이후 Supabase/프로필 계정을 삭제합니다.
+- `DELETE /api/v1/auth/account` 를 호출하면, 로그인 타입이 `apple`/`google` 인 경우 서버가 먼저 각 Provider revoke API(Apple, Google)를 내부적으로 실행하여 연결을 끊고, 이후 Supabase/프로필 계정을 삭제합니다.
 - 추가로 유저 프로필을 싱크하거나 RLS를 사용하는 API에서는 Supabase 토큰을 그대로 사용해도 되고, 서버 JWT를 사용해도 됩니다.
 
 ---
@@ -106,7 +109,7 @@ Nest 앱 엔트리포인트는 `src/main.ts`, 프로덕션은 `node dist/main.js
 | 메서드 | 경로                      | 설명               | 인증 |
 |--------|---------------------------|--------------------|------|
 | `POST` | `/api/v1/oauth/lookup`    | Supabase access token으로 가입 여부 확인 | - |
-| `POST` | `/api/v1/oauth/signup`    | 소셜/OAuth access token → 서버 JWT 발급 (`appleRefreshToken` 또는 `authorizationCode` 전달 가능) | - |
+| `POST` | `/api/v1/oauth/signup`    | 소셜/OAuth access token → 서버 JWT 발급 (`appleRefreshToken`, `googleRefreshToken`, `authorizationCode` 등 전달 가능) | - |
 | `POST` | `/api/v1/oauth/login`     | 소셜/OAuth access token으로 로그인 | - |
 | `POST` | `/api/v1/oauth/apple/revoke` | Apple refresh token으로 애플 로그인 해제 | Bearer |
 
@@ -199,3 +202,10 @@ Supabase Auth에서 제공하는 Apple OAuth를 그대로 사용하는 것이 �
 2. Apple Developer 콘솔에 Supabase의 Redirect URI (`https://wqdizhgmgsjzvvdiflbg.supabase.co/auth/v1/callback`) 를 등록합니다.
 3. 프런트엔드는 Supabase 문서에 나온 대로 `supabase.auth.signInWithOAuth({ provider: 'apple' })` 혹은 해당 authorize URL로 리다이렉트합니다. (`redirect_to` 파라미터로 완료 후 돌아갈 URL 지정)
 4. 참고: [Supabase Apple 로그인 가이드](https://supabase.com/docs/guides/auth/social-login/auth-apple?environment=server&framework=nextjs&platform=web)
+
+### 소셜 로그인(구글)
+
+1. Google Cloud Console > API & Services > Credentials 에서 OAuth Client ID (웹/모바일)를 생성하고, 동일한 Redirect URI를 Supabase Provider 설정에도 등록합니다.
+2. `.env` 에 `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_REDIRECT_URI` 를 채워두면 서버가 `https://oauth2.googleapis.com/token` 으로 authorization code 교환을 수행할 수 있습니다.
+3. PKCE를 사용하는 모바일/SPA라면 클라이언트에서 `code_verifier` 를 보관했다가 서버 호출 시 함께 전달하세요. 서버는 `authorizationCode + codeVerifier (+ redirectUri)` 로 refresh token을 교환하고, Supabase `profiles.google_refresh_token` 컬럼에 저장합니다.
+4. 참고: [Supabase Google 로그인 가이드](https://supabase.com/docs/guides/auth/social-login/auth-google).

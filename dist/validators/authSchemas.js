@@ -28,13 +28,26 @@ exports.oauthTokenSchema = zod_1.z
     accessToken: zod_1.z.string().min(10, 'accessToken is required'),
     loginType: loginTypeEnum.optional(),
     appleRefreshToken: zod_1.z.string().min(10).optional(),
+    googleRefreshToken: zod_1.z.string().min(10).optional(),
     authorizationCode: zod_1.z.string().min(10).optional(),
+    codeVerifier: zod_1.z.string().min(10).optional(),
+    redirectUri: zod_1.z.string().min(5).optional(),
 })
     .transform((data) => ({
     accessToken: data.accessToken.trim(),
-    loginType: (data.loginType ?? 'email'),
+    loginType: (data.loginType ??
+        (data.authorizationCode
+            ? 'apple'
+            : data.appleRefreshToken
+                ? 'apple'
+                : data.googleRefreshToken
+                    ? 'google'
+                    : 'email')),
     appleRefreshToken: data.appleRefreshToken?.trim(),
+    googleRefreshToken: data.googleRefreshToken?.trim(),
     authorizationCode: data.authorizationCode?.trim(),
+    codeVerifier: data.codeVerifier?.trim(),
+    redirectUri: data.redirectUri?.trim(),
 }));
 exports.refreshSchema = zod_1.z.object({
     refreshToken: zod_1.z.string().min(10),

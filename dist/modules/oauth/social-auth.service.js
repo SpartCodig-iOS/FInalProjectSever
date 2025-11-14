@@ -32,6 +32,11 @@ let SocialAuthService = class SocialAuthService {
             throw new common_1.ServiceUnavailableException('Apple credentials are not configured');
         }
     }
+    ensureGoogleEnv() {
+        if (!env_1.env.googleClientId || !env_1.env.googleClientSecret) {
+            throw new common_1.ServiceUnavailableException('Google credentials are not configured');
+        }
+    }
     buildAppleClientSecret() {
         this.ensureAppleEnv();
         const privateKey = env_1.env.applePrivateKey.replace(/\\n/g, '\n');
@@ -47,7 +52,7 @@ let SocialAuthService = class SocialAuthService {
             keyid: env_1.env.appleKeyId,
         });
     }
-    async loginWithOAuthToken(accessToken, loginType = 'email', appleRefreshToken, authorizationCode) {
+    async loginWithOAuthToken(accessToken, loginType = 'email', options = {}) {
         if (!accessToken) {
             throw new common_1.UnauthorizedException('Missing Supabase access token');
         }
@@ -58,12 +63,23 @@ let SocialAuthService = class SocialAuthService {
         await this.supabaseService.ensureProfileFromSupabaseUser(supabaseUser, loginType);
         const preferDisplayName = loginType !== 'email' && loginType !== 'username';
         const user = (0, mappers_1.fromSupabaseUser)(supabaseUser, { preferDisplayName });
+        const { appleRefreshToken, googleRefreshToken, authorizationCode, codeVerifier, redirectUri } = options;
         let finalAppleRefreshToken = appleRefreshToken;
         if (loginType === 'apple' && !finalAppleRefreshToken && authorizationCode) {
             finalAppleRefreshToken = await this.exchangeAppleAuthorizationCode(authorizationCode);
         }
         if (loginType === 'apple' && finalAppleRefreshToken) {
             await this.supabaseService.saveAppleRefreshToken(user.id, finalAppleRefreshToken);
+        }
+        let finalGoogleRefreshToken = googleRefreshToken;
+        if (loginType === 'google' && !finalGoogleRefreshToken && authorizationCode) {
+            finalGoogleRefreshToken = await this.exchangeGoogleAuthorizationCode(authorizationCode, {
+                codeVerifier,
+                redirectUri,
+            });
+        }
+        if (loginType === 'google' && finalGoogleRefreshToken) {
+            await this.supabaseService.saveGoogleRefreshToken(user.id, finalGoogleRefreshToken);
         }
         return this.authService.createAuthSession(user, loginType);
     }
@@ -106,6 +122,39 @@ let SocialAuthService = class SocialAuthService {
         }
         await this.supabaseService.saveAppleRefreshToken(userId, null);
     }
+    async revokeGoogleConnection(userId, refreshToken) {
+        const tokenToUse = refreshToken ??
+            (await this.supabaseService.getGoogleRefreshToken(userId)) ??
+            null;
+        if (!tokenToUse) {
+            throw new common_1.BadRequestException('Google refresh token is required');
+        }
+        this.ensureGoogleEnv();
+        const body = new URLSearchParams({
+            token: tokenToUse,
+            client_id: env_1.env.googleClientId,
+            client_secret: env_1.env.googleClientSecret,
+        });
+        const response = await fetch('https://oauth2.googleapis.com/revoke', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+            },
+            body,
+        });
+        if (!response.ok) {
+            const text = await response.text();
+            throw new common_1.ServiceUnavailableException(`Google revoke failed: ${response.status} ${text}`);
+        }
+        await this.supabaseService.saveGoogleRefreshToken(userId, null);
+    }
+    resolveGoogleRedirectUri(override) {
+        const resolved = override ?? env_1.env.googleRedirectUri;
+        if (!resolved) {
+            throw new common_1.ServiceUnavailableException('Google redirect URI is not configured');
+        }
+        return resolved;
+    }
     async exchangeAppleAuthorizationCode(code) {
         this.ensureAppleEnv();
         const clientSecret = this.buildAppleClientSecret();
@@ -129,6 +178,35 @@ let SocialAuthService = class SocialAuthService {
         const result = (await response.json());
         if (!result.refresh_token) {
             throw new common_1.ServiceUnavailableException('Apple did not return a refresh_token');
+        }
+        return result.refresh_token;
+    }
+    async exchangeGoogleAuthorizationCode(code, options = {}) {
+        this.ensureGoogleEnv();
+        const body = new URLSearchParams({
+            client_id: env_1.env.googleClientId,
+            client_secret: env_1.env.googleClientSecret,
+            code,
+            grant_type: 'authorization_code',
+            redirect_uri: this.resolveGoogleRedirectUri(options.redirectUri),
+        });
+        if (options.codeVerifier) {
+            body.set('code_verifier', options.codeVerifier);
+        }
+        const response = await fetch('https://oauth2.googleapis.com/token', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+            },
+            body,
+        });
+        if (!response.ok) {
+            const text = await response.text();
+            throw new common_1.ServiceUnavailableException(`Google token exchange failed: ${response.status} ${text}`);
+        }
+        const result = (await response.json());
+        if (!result.refresh_token) {
+            throw new common_1.ServiceUnavailableException('Google did not return a refresh_token');
         }
         return result.refresh_token;
     }

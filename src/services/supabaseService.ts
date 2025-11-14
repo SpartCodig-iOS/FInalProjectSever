@@ -178,6 +178,33 @@ export class SupabaseService {
     return (data?.apple_refresh_token as string | null) ?? null;
   }
 
+  async saveGoogleRefreshToken(userId: string, refreshToken: string | null) {
+    const client = this.getClient();
+    const { error } = await client
+      .from(env.supabaseProfileTable)
+      .update({
+        google_refresh_token: refreshToken,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', userId);
+    if (error) {
+      throw new Error(`[saveGoogleRefreshToken] update failed: ${error.message}`);
+    }
+  }
+
+  async getGoogleRefreshToken(userId: string): Promise<string | null> {
+    const client = this.getClient();
+    const { data, error } = await client
+      .from(env.supabaseProfileTable)
+      .select('google_refresh_token')
+      .eq('id', userId)
+      .maybeSingle();
+    if (error) {
+      throw new Error(`[getGoogleRefreshToken] select failed: ${error.message}`);
+    }
+    return (data?.google_refresh_token as string | null) ?? null;
+  }
+
   async deleteUser(id: string) {
     const client = this.getClient();
 

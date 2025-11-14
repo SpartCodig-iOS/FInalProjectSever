@@ -29,13 +29,28 @@ export const oauthTokenSchema = z
     accessToken: z.string().min(10, 'accessToken is required'),
     loginType: loginTypeEnum.optional(),
     appleRefreshToken: z.string().min(10).optional(),
+    googleRefreshToken: z.string().min(10).optional(),
     authorizationCode: z.string().min(10).optional(),
+    codeVerifier: z.string().min(10).optional(),
+    redirectUri: z.string().min(5).optional(),
   })
   .transform((data) => ({
     accessToken: data.accessToken.trim(),
-    loginType: (data.loginType ?? 'email') as LoginType,
+    loginType: (
+      data.loginType ??
+      (data.authorizationCode
+        ? 'apple'
+        : data.appleRefreshToken
+          ? 'apple'
+          : data.googleRefreshToken
+            ? 'google'
+            : 'email')
+    ) as LoginType,
     appleRefreshToken: data.appleRefreshToken?.trim(),
+    googleRefreshToken: data.googleRefreshToken?.trim(),
     authorizationCode: data.authorizationCode?.trim(),
+    codeVerifier: data.codeVerifier?.trim(),
+    redirectUri: data.redirectUri?.trim(),
   }));
 
 export const refreshSchema = z.object({
