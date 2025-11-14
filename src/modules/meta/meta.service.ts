@@ -36,6 +36,8 @@ export class MetaService {
   private readonly cacheTTL = 1000 * 60 * 60; // 1시간
   private readonly rateCache = new Map<string, { data: CachedRate; expiresAt: number }>();
   private readonly rateCacheTTL = 1000 * 60 * 10; // 10분
+  private countriesFetchPromise: Promise<CountryMeta[]> | null = null;
+  private readonly ratePromiseCache = new Map<string, Promise<CachedRate>>();
 
   private mapCountries(payload: RestCountry[]): CountryMeta[] {
     return payload
@@ -58,22 +60,32 @@ export class MetaService {
     if (this.countriesCache && this.countriesCache.expiresAt > Date.now()) {
       return this.countriesCache.data;
     }
-
-    const response = await fetch(
-      'https://restcountries.com/v3.1/all?fields=cca2,name,translations,currencies',
-    );
-
-    if (!response.ok) {
-      throw new ServiceUnavailableException('국가 정보를 가져오지 못했습니다.');
+    if (this.countriesFetchPromise) {
+      return this.countriesFetchPromise;
     }
+    this.countriesFetchPromise = (async () => {
+      const response = await fetch(
+        'https://restcountries.com/v3.1/all?fields=cca2,name,translations,currencies',
+      );
 
-    const payload = (await response.json()) as RestCountry[];
-    const mapped = this.mapCountries(payload);
-    this.countriesCache = {
-      data: mapped,
-      expiresAt: Date.now() + this.cacheTTL,
-    };
-    return mapped;
+      if (!response.ok) {
+        throw new ServiceUnavailableException('국가 정보를 가져오지 못했습니다.');
+      }
+
+      const payload = (await response.json()) as RestCountry[];
+      const mapped = this.mapCountries(payload);
+      this.countriesCache = {
+        data: mapped,
+        expiresAt: Date.now() + this.cacheTTL,
+      };
+      return mapped;
+    })();
+
+    try {
+      return await this.countriesFetchPromise;
+    } finally {
+      this.countriesFetchPromise = null;
+    }
   }
 
   async getExchangeRate(
@@ -107,24 +119,42 @@ export class MetaService {
       return computeResult(same);
     }
 
-    const response = await fetch(
-      `https://api.frankfurter.app/latest?from=${normalizedBase}&to=${normalizedQuote}`,
-    );
-    if (!response.ok) {
-      throw new ServiceUnavailableException('환율 정보를 가져오지 못했습니다.');
+    const existingPromise = this.ratePromiseCache.get(cacheKey);
+    if (existingPromise) {
+      const rate = await existingPromise;
+      return computeResult(rate);
     }
-    const payload = (await response.json()) as { date: string; rates: Record<string, number> };
-    const rateValue = payload.rates?.[normalizedQuote];
-    if (typeof rateValue !== 'number') {
-      throw new ServiceUnavailableException('요청한 통화쌍 환율이 없습니다.');
+
+    const ratePromise = (async () => {
+      const params = new URLSearchParams({
+        from: normalizedBase,
+        to: normalizedQuote,
+      });
+      const response = await fetch(`https://api.frankfurter.app/latest?${params.toString()}`);
+      if (!response.ok) {
+        throw new ServiceUnavailableException('환율 정보를 가져오지 못했습니다.');
+      }
+      const payload = (await response.json()) as { date: string; rates: Record<string, number> };
+      const rateValue = payload.rates?.[normalizedQuote];
+      if (typeof rateValue !== 'number') {
+        throw new ServiceUnavailableException('요청한 통화쌍 환율이 없습니다.');
+      }
+      return {
+        baseCurrency: normalizedBase,
+        quoteCurrency: normalizedQuote,
+        rate: rateValue,
+        date: payload.date,
+      };
+    })();
+
+    this.ratePromiseCache.set(cacheKey, ratePromise);
+
+    try {
+      const baseResult = await ratePromise;
+      this.rateCache.set(cacheKey, { data: baseResult, expiresAt: Date.now() + this.rateCacheTTL });
+      return computeResult(baseResult);
+    } finally {
+      this.ratePromiseCache.delete(cacheKey);
     }
-    const baseResult: CachedRate = {
-      baseCurrency: normalizedBase,
-      quoteCurrency: normalizedQuote,
-      rate: rateValue,
-      date: payload.date,
-    };
-    this.rateCache.set(cacheKey, { data: baseResult, expiresAt: Date.now() + this.rateCacheTTL });
-    return computeResult(baseResult);
   }
 }

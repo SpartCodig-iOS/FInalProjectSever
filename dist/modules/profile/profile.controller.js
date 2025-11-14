@@ -19,7 +19,12 @@ const auth_guard_1 = require("../../common/guards/auth.guard");
 const api_1 = require("../../types/api");
 const mappers_1 = require("../../utils/mappers");
 const profile_response_dto_1 = require("./dto/profile-response.dto");
+const profileSchemas_1 = require("../../validators/profileSchemas");
+const profile_service_1 = require("./profile.service");
 let ProfileController = class ProfileController {
+    constructor(profileService) {
+        this.profileService = profileService;
+    }
     getProfile(req) {
         if (!req.currentUser) {
             throw new common_1.UnauthorizedException('Unauthorized');
@@ -29,6 +34,14 @@ let ProfileController = class ProfileController {
             loginType: req.loginType ?? 'email',
         };
         return (0, api_1.success)(profileData);
+    }
+    async updateProfile(body, req) {
+        if (!req.currentUser) {
+            throw new common_1.UnauthorizedException('Unauthorized');
+        }
+        const payload = profileSchemas_1.updateProfileSchema.parse(body);
+        const updated = await this.profileService.updateProfile(req.currentUser.id, payload);
+        return (0, api_1.success)((0, mappers_1.toProfileResponse)(updated), 'Profile updated');
     }
 };
 exports.ProfileController = ProfileController;
@@ -44,7 +57,30 @@ __decorate([
     __metadata("design:paramtypes", [Object]),
     __metadata("design:returntype", void 0)
 ], ProfileController.prototype, "getProfile", null);
+__decorate([
+    (0, common_1.UseGuards)(auth_guard_1.AuthGuard),
+    (0, common_1.Patch)('me'),
+    (0, common_1.HttpCode)(common_1.HttpStatus.OK),
+    (0, swagger_1.ApiBearerAuth)(),
+    (0, swagger_1.ApiOperation)({ summary: '현재 사용자 프로필 수정' }),
+    (0, swagger_1.ApiBody)({
+        schema: {
+            type: 'object',
+            properties: {
+                name: { type: 'string', example: '김코드', nullable: true },
+                avatarURL: { type: 'string', example: 'https://...', nullable: true },
+            },
+        },
+    }),
+    (0, swagger_1.ApiOkResponse)({ type: profile_response_dto_1.ProfileResponseDto }),
+    __param(0, (0, common_1.Body)()),
+    __param(1, (0, common_1.Req)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, Object]),
+    __metadata("design:returntype", Promise)
+], ProfileController.prototype, "updateProfile", null);
 exports.ProfileController = ProfileController = __decorate([
     (0, swagger_1.ApiTags)('Profile'),
-    (0, common_1.Controller)('api/v1/profile')
+    (0, common_1.Controller)('api/v1/profile'),
+    __metadata("design:paramtypes", [profile_service_1.ProfileService])
 ], ProfileController);

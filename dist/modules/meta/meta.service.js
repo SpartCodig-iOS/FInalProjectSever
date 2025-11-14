@@ -14,6 +14,8 @@ let MetaService = class MetaService {
         this.cacheTTL = 1000 * 60 * 60; // 1시간
         this.rateCache = new Map();
         this.rateCacheTTL = 1000 * 60 * 10; // 10분
+        this.countriesFetchPromise = null;
+        this.ratePromiseCache = new Map();
     }
     mapCountries(payload) {
         return payload
@@ -35,17 +37,28 @@ let MetaService = class MetaService {
         if (this.countriesCache && this.countriesCache.expiresAt > Date.now()) {
             return this.countriesCache.data;
         }
-        const response = await fetch('https://restcountries.com/v3.1/all?fields=cca2,name,translations,currencies');
-        if (!response.ok) {
-            throw new common_1.ServiceUnavailableException('국가 정보를 가져오지 못했습니다.');
+        if (this.countriesFetchPromise) {
+            return this.countriesFetchPromise;
         }
-        const payload = (await response.json());
-        const mapped = this.mapCountries(payload);
-        this.countriesCache = {
-            data: mapped,
-            expiresAt: Date.now() + this.cacheTTL,
-        };
-        return mapped;
+        this.countriesFetchPromise = (async () => {
+            const response = await fetch('https://restcountries.com/v3.1/all?fields=cca2,name,translations,currencies');
+            if (!response.ok) {
+                throw new common_1.ServiceUnavailableException('국가 정보를 가져오지 못했습니다.');
+            }
+            const payload = (await response.json());
+            const mapped = this.mapCountries(payload);
+            this.countriesCache = {
+                data: mapped,
+                expiresAt: Date.now() + this.cacheTTL,
+            };
+            return mapped;
+        })();
+        try {
+            return await this.countriesFetchPromise;
+        }
+        finally {
+            this.countriesFetchPromise = null;
+        }
     }
     async getExchangeRate(baseCurrency, quoteCurrency, baseAmount = 1000) {
         const normalizedBase = baseCurrency.toUpperCase();
@@ -71,23 +84,41 @@ let MetaService = class MetaService {
             this.rateCache.set(cacheKey, { data: same, expiresAt: Date.now() + this.rateCacheTTL });
             return computeResult(same);
         }
-        const response = await fetch(`https://api.frankfurter.app/latest?from=${normalizedBase}&to=${normalizedQuote}`);
-        if (!response.ok) {
-            throw new common_1.ServiceUnavailableException('환율 정보를 가져오지 못했습니다.');
+        const existingPromise = this.ratePromiseCache.get(cacheKey);
+        if (existingPromise) {
+            const rate = await existingPromise;
+            return computeResult(rate);
         }
-        const payload = (await response.json());
-        const rateValue = payload.rates?.[normalizedQuote];
-        if (typeof rateValue !== 'number') {
-            throw new common_1.ServiceUnavailableException('요청한 통화쌍 환율이 없습니다.');
+        const ratePromise = (async () => {
+            const params = new URLSearchParams({
+                from: normalizedBase,
+                to: normalizedQuote,
+            });
+            const response = await fetch(`https://api.frankfurter.app/latest?${params.toString()}`);
+            if (!response.ok) {
+                throw new common_1.ServiceUnavailableException('환율 정보를 가져오지 못했습니다.');
+            }
+            const payload = (await response.json());
+            const rateValue = payload.rates?.[normalizedQuote];
+            if (typeof rateValue !== 'number') {
+                throw new common_1.ServiceUnavailableException('요청한 통화쌍 환율이 없습니다.');
+            }
+            return {
+                baseCurrency: normalizedBase,
+                quoteCurrency: normalizedQuote,
+                rate: rateValue,
+                date: payload.date,
+            };
+        })();
+        this.ratePromiseCache.set(cacheKey, ratePromise);
+        try {
+            const baseResult = await ratePromise;
+            this.rateCache.set(cacheKey, { data: baseResult, expiresAt: Date.now() + this.rateCacheTTL });
+            return computeResult(baseResult);
         }
-        const baseResult = {
-            baseCurrency: normalizedBase,
-            quoteCurrency: normalizedQuote,
-            rate: rateValue,
-            date: payload.date,
-        };
-        this.rateCache.set(cacheKey, { data: baseResult, expiresAt: Date.now() + this.rateCacheTTL });
-        return computeResult(baseResult);
+        finally {
+            this.ratePromiseCache.delete(cacheKey);
+        }
     }
 };
 exports.MetaService = MetaService;

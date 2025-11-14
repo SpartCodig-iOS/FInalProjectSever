@@ -6,16 +6,19 @@ var __decorate = (this && this.__decorate) || function (decorators, target, key,
     return c > 3 && r && Object.defineProperty(target, key, r), r;
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.ProfileModule = void 0;
+exports.TravelExpenseModule = void 0;
 const common_1 = require("@nestjs/common");
-const profile_controller_1 = require("./profile.controller");
-const profile_service_1 = require("./profile.service");
-let ProfileModule = class ProfileModule {
+const travel_expense_controller_1 = require("./travel-expense.controller");
+const travel_expense_service_1 = require("./travel-expense.service");
+const meta_module_1 = require("../meta/meta.module");
+let TravelExpenseModule = class TravelExpenseModule {
 };
-exports.ProfileModule = ProfileModule;
-exports.ProfileModule = ProfileModule = __decorate([
+exports.TravelExpenseModule = TravelExpenseModule;
+exports.TravelExpenseModule = TravelExpenseModule = __decorate([
     (0, common_1.Module)({
-        controllers: [profile_controller_1.ProfileController],
-        providers: [profile_service_1.ProfileService],
+        imports: [meta_module_1.MetaModule],
+        controllers: [travel_expense_controller_1.TravelExpenseController],
+        providers: [travel_expense_service_1.TravelExpenseService],
+        exports: [travel_expense_service_1.TravelExpenseService],
     })
-], ProfileModule);
+], TravelExpenseModule);

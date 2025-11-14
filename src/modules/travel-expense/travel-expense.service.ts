@@ -133,7 +133,7 @@ export class TravelExpenseService {
           payload.title,
           payload.note ?? null,
           payload.amount,
-          payload.currency,
+          payload.currency.toUpperCase(),
           convertedAmount,
           payload.expenseDate,
           payload.category ?? null,
@@ -239,11 +239,12 @@ export class TravelExpenseService {
       category: row.category,
       payerId: row.payer_id,
       payerName: row.payer_name ?? null,
-      participants: row.participants?.map((participant: any) => ({
-        memberId: participant.memberId,
-        name: participant.name ?? null,
-        splitAmount: Number(participant.splitAmount),
-      })) ?? [],
+      participants:
+        row.participants?.map((participant: any) => ({
+          memberId: participant.memberId,
+          name: participant.name ?? null,
+          splitAmount: Number(participant.splitAmount),
+        })) ?? [],
     }));
   }
 }
