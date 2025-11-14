@@ -9,7 +9,7 @@ var __metadata = (this && this.__metadata) || function (k, v) {
     if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.TravelInviteResponseDto = exports.TravelMemberDto = exports.TravelSummaryDto = void 0;
+exports.TravelInviteResponseDto = exports.TravelExpenseDto = exports.TravelExpenseParticipantDto = exports.TravelMemberDto = exports.TravelSummaryDto = void 0;
 const swagger_1 = require("@nestjs/swagger");
 class TravelSummaryDto {
 }
@@ -81,6 +81,68 @@ __decorate([
     (0, swagger_1.ApiProperty)({ example: 'member' }),
     __metadata("design:type", String)
 ], TravelMemberDto.prototype, "role", void 0);
+class TravelExpenseParticipantDto {
+}
+exports.TravelExpenseParticipantDto = TravelExpenseParticipantDto;
+__decorate([
+    (0, swagger_1.ApiProperty)({ example: '8c4c3b33-...' }),
+    __metadata("design:type", String)
+], TravelExpenseParticipantDto.prototype, "memberId", void 0);
+__decorate([
+    (0, swagger_1.ApiProperty)({ example: '김철수', nullable: true }),
+    __metadata("design:type", Object)
+], TravelExpenseParticipantDto.prototype, "name", void 0);
+__decorate([
+    (0, swagger_1.ApiProperty)({ example: 35200 }),
+    __metadata("design:type", Number)
+], TravelExpenseParticipantDto.prototype, "splitAmount", void 0);
+class TravelExpenseDto {
+}
+exports.TravelExpenseDto = TravelExpenseDto;
+__decorate([
+    (0, swagger_1.ApiProperty)({ example: 'd1a2e3f4-...' }),
+    __metadata("design:type", String)
+], TravelExpenseDto.prototype, "id", void 0);
+__decorate([
+    (0, swagger_1.ApiProperty)({ example: '라멘 식사' }),
+    __metadata("design:type", String)
+], TravelExpenseDto.prototype, "title", void 0);
+__decorate([
+    (0, swagger_1.ApiProperty)({ example: '신주쿠역 인근' }),
+    __metadata("design:type", Object)
+], TravelExpenseDto.prototype, "note", void 0);
+__decorate([
+    (0, swagger_1.ApiProperty)({ example: 3500 }),
+    __metadata("design:type", Number)
+], TravelExpenseDto.prototype, "amount", void 0);
+__decorate([
+    (0, swagger_1.ApiProperty)({ example: 'JPY' }),
+    __metadata("design:type", String)
+], TravelExpenseDto.prototype, "currency", void 0);
+__decorate([
+    (0, swagger_1.ApiProperty)({ example: 35200 }),
+    __metadata("design:type", Number)
+], TravelExpenseDto.prototype, "convertedAmount", void 0);
+__decorate([
+    (0, swagger_1.ApiProperty)({ example: '2025-11-17' }),
+    __metadata("design:type", String)
+], TravelExpenseDto.prototype, "expenseDate", void 0);
+__decorate([
+    (0, swagger_1.ApiProperty)({ example: 'food', nullable: true }),
+    __metadata("design:type", Object)
+], TravelExpenseDto.prototype, "category", void 0);
+__decorate([
+    (0, swagger_1.ApiProperty)({ example: 'owner' }),
+    __metadata("design:type", String)
+], TravelExpenseDto.prototype, "payerId", void 0);
+__decorate([
+    (0, swagger_1.ApiProperty)({ example: '홍길동', nullable: true }),
+    __metadata("design:type", Object)
+], TravelExpenseDto.prototype, "payerName", void 0);
+__decorate([
+    (0, swagger_1.ApiProperty)({ type: () => TravelExpenseParticipantDto, isArray: true }),
+    __metadata("design:type", Array)
+], TravelExpenseDto.prototype, "participants", void 0);
 class TravelInviteResponseDto {
 }
 exports.TravelInviteResponseDto = TravelInviteResponseDto;

@@ -5,14 +5,19 @@ import { AuthGuard } from '../../common/guards/auth.guard';
 import { RequestWithUser } from '../../types/request';
 import { TravelService } from './travel.service';
 import { createTravelSchema, travelInviteCodeSchema } from '../../validators/travelSchemas';
-import { TravelInviteResponseDto, TravelSummaryDto } from './dto/travel-response.dto';
+import { TravelInviteResponseDto, TravelSummaryDto, TravelExpenseDto } from './dto/travel-response.dto';
+import { createExpenseSchema } from '../../validators/travelExpenseSchemas';
+import { TravelExpenseService } from './travel-expense.service';
 
 @ApiTags('Travels')
 @ApiBearerAuth()
 @UseGuards(AuthGuard)
 @Controller('api/v1/travels')
 export class TravelController {
-  constructor(private readonly travelService: TravelService) {}
+  constructor(
+    private readonly travelService: TravelService,
+    private readonly travelExpenseService: TravelExpenseService,
+  ) {}
 
   @Get()
   @HttpCode(HttpStatus.OK)
@@ -116,5 +121,54 @@ export class TravelController {
     }
     await this.travelService.deleteTravel(travelId, req.currentUser.id);
     return success({}, 'Travel deleted');
+  }
+
+  @Get(':travelId/expenses')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: '여행 지출 목록 조회' })
+  @ApiOkResponse({ type: TravelExpenseDto, isArray: true })
+  async listExpenses(@Param('travelId') travelId: string, @Req() req: RequestWithUser) {
+    if (!req.currentUser) {
+      throw new UnauthorizedException('Unauthorized');
+    }
+    const expenses = await this.travelExpenseService.listExpenses(travelId, req.currentUser.id);
+    return success(expenses);
+  }
+
+  @Post(':travelId/expenses')
+  @HttpCode(HttpStatus.CREATED)
+  @ApiOperation({ summary: '여행 지출 추가' })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      required: ['title', 'amount', 'currency', 'expenseDate'],
+      properties: {
+        title: { type: 'string', example: '라멘 식비' },
+        note: { type: 'string', example: '신주쿠역 인근', nullable: true },
+        amount: { type: 'number', example: 3500 },
+        currency: { type: 'string', example: 'JPY', description: '지출 통화' },
+        expenseDate: { type: 'string', example: '2025-11-17', description: 'YYYY-MM-DD' },
+        category: { type: 'string', example: 'food', nullable: true },
+        participantIds: {
+          type: 'array',
+          items: { type: 'string', format: 'uuid' },
+          nullable: true,
+          description: '지출 분배 대상 (생략 시 모든 팀원)',
+        },
+      },
+    },
+  })
+  @ApiOkResponse({ type: TravelExpenseDto })
+  async createExpense(
+    @Param('travelId') travelId: string,
+    @Body() body: unknown,
+    @Req() req: RequestWithUser,
+  ) {
+    if (!req.currentUser) {
+      throw new UnauthorizedException('Unauthorized');
+    }
+    const payload = createExpenseSchema.parse(body);
+    const expense = await this.travelExpenseService.createExpense(travelId, req.currentUser.id, payload);
+    return success(expense, 'Expense created');
   }
 }

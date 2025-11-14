@@ -122,6 +122,51 @@ Nest 앱 엔트리포인트는 `src/main.ts`, 프로덕션은 `node dist/main.js
 | `POST` | `/api/v1/travels/{travelId}/invite` | 호스트가 초대 코드 생성 | Bearer |
 | `POST` | `/api/v1/travels/join` | 초대 코드로 여행 참여 | Bearer |
 | `DELETE` | `/api/v1/travels/{travelId}` | 여행 삭제 (호스트 전용) | Bearer |
+| `GET` | `/api/v1/travels/{travelId}/expenses` | 여행 지출 목록 조회 | Bearer |
+| `POST` | `/api/v1/travels/{travelId}/expenses` | 여행 지출 추가 (금액/통화/참여자) | Bearer |
+
+### 실시간 지출 공유 (Supabase Realtime)
+
+- `db/migrations/002_enable_travel_expense_realtime.sql` 을 실행해 `travel_expenses`, `travel_expense_participants` 테이블을 `supabase_realtime` 퍼블리케이션에 등록하면, Supabase Realtime 으로 자동 브로드캐스트됩니다.
+- 프런트엔드는 다음과 같이 구독하면 됩니다:
+
+```swift
+import Supabase
+
+let supabase = SupabaseClient(
+  supabaseURL: URL(string: "https://YOUR_PROJECT.supabase.co")!,
+  supabaseKey: "YOUR_ANON_KEY"
+)
+
+let channel = supabase.channel("travel-expenses-\(travelId)")
+
+channel.on(
+  PostgresChangeEvent.all,
+  schema: "public",
+  table: "travel_expenses",
+  filter: "travel_id=eq.\(travelId)"
+) { payload in
+  if let newRow = payload.newRecord {
+    // 지출 생성/수정
+  }
+  if let oldRow = payload.oldRecord {
+    // 삭제 감지
+  }
+}
+
+channel.on(
+  PostgresChangeEvent.all,
+  schema: "public",
+  table: "travel_expense_participants",
+  filter: "expense_id=eq.\(expenseId)"
+) { payload in
+  // 참여자 변경 처리
+}
+
+channel.subscribe()
+```
+
+- 실시간 이벤트를 받으면 `/api/v1/travels/{travelId}/expenses` 를 다시 호출하거나, payload 기반으로 UI 를 갱신하면 됩니다.
 
 ### 메타 정보
 

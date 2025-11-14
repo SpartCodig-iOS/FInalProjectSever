@@ -10,13 +10,16 @@ exports.TravelModule = void 0;
 const common_1 = require("@nestjs/common");
 const travel_controller_1 = require("./travel.controller");
 const travel_service_1 = require("./travel.service");
+const travel_expense_service_1 = require("./travel-expense.service");
+const meta_module_1 = require("../meta/meta.module");
 let TravelModule = class TravelModule {
 };
 exports.TravelModule = TravelModule;
 exports.TravelModule = TravelModule = __decorate([
     (0, common_1.Module)({
+        imports: [meta_module_1.MetaModule],
         controllers: [travel_controller_1.TravelController],
-        providers: [travel_service_1.TravelService],
-        exports: [travel_service_1.TravelService],
+        providers: [travel_service_1.TravelService, travel_expense_service_1.TravelExpenseService],
+        exports: [travel_service_1.TravelService, travel_expense_service_1.TravelExpenseService],
     })
 ], TravelModule);

@@ -20,9 +20,12 @@ const auth_guard_1 = require("../../common/guards/auth.guard");
 const travel_service_1 = require("./travel.service");
 const travelSchemas_1 = require("../../validators/travelSchemas");
 const travel_response_dto_1 = require("./dto/travel-response.dto");
+const travelExpenseSchemas_1 = require("../../validators/travelExpenseSchemas");
+const travel_expense_service_1 = require("./travel-expense.service");
 let TravelController = class TravelController {
-    constructor(travelService) {
+    constructor(travelService, travelExpenseService) {
         this.travelService = travelService;
+        this.travelExpenseService = travelExpenseService;
     }
     async list(req) {
         if (!req.currentUser) {
@@ -60,6 +63,21 @@ let TravelController = class TravelController {
         }
         await this.travelService.deleteTravel(travelId, req.currentUser.id);
         return (0, api_1.success)({}, 'Travel deleted');
+    }
+    async listExpenses(travelId, req) {
+        if (!req.currentUser) {
+            throw new common_1.UnauthorizedException('Unauthorized');
+        }
+        const expenses = await this.travelExpenseService.listExpenses(travelId, req.currentUser.id);
+        return (0, api_1.success)(expenses);
+    }
+    async createExpense(travelId, body, req) {
+        if (!req.currentUser) {
+            throw new common_1.UnauthorizedException('Unauthorized');
+        }
+        const payload = travelExpenseSchemas_1.createExpenseSchema.parse(body);
+        const expense = await this.travelExpenseService.createExpense(travelId, req.currentUser.id, payload);
+        return (0, api_1.success)(expense, 'Expense created');
     }
 };
 exports.TravelController = TravelController;
@@ -159,10 +177,54 @@ __decorate([
     __metadata("design:paramtypes", [String, Object]),
     __metadata("design:returntype", Promise)
 ], TravelController.prototype, "deleteTravel", null);
+__decorate([
+    (0, common_1.Get)(':travelId/expenses'),
+    (0, common_1.HttpCode)(common_1.HttpStatus.OK),
+    (0, swagger_1.ApiOperation)({ summary: '여행 지출 목록 조회' }),
+    (0, swagger_1.ApiOkResponse)({ type: travel_response_dto_1.TravelExpenseDto, isArray: true }),
+    __param(0, (0, common_1.Param)('travelId')),
+    __param(1, (0, common_1.Req)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String, Object]),
+    __metadata("design:returntype", Promise)
+], TravelController.prototype, "listExpenses", null);
+__decorate([
+    (0, common_1.Post)(':travelId/expenses'),
+    (0, common_1.HttpCode)(common_1.HttpStatus.CREATED),
+    (0, swagger_1.ApiOperation)({ summary: '여행 지출 추가' }),
+    (0, swagger_1.ApiBody)({
+        schema: {
+            type: 'object',
+            required: ['title', 'amount', 'currency', 'expenseDate'],
+            properties: {
+                title: { type: 'string', example: '라멘 식비' },
+                note: { type: 'string', example: '신주쿠역 인근', nullable: true },
+                amount: { type: 'number', example: 3500 },
+                currency: { type: 'string', example: 'JPY', description: '지출 통화' },
+                expenseDate: { type: 'string', example: '2025-11-17', description: 'YYYY-MM-DD' },
+                category: { type: 'string', example: 'food', nullable: true },
+                participantIds: {
+                    type: 'array',
+                    items: { type: 'string', format: 'uuid' },
+                    nullable: true,
+                    description: '지출 분배 대상 (생략 시 모든 팀원)',
+                },
+            },
+        },
+    }),
+    (0, swagger_1.ApiOkResponse)({ type: travel_response_dto_1.TravelExpenseDto }),
+    __param(0, (0, common_1.Param)('travelId')),
+    __param(1, (0, common_1.Body)()),
+    __param(2, (0, common_1.Req)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String, Object, Object]),
+    __metadata("design:returntype", Promise)
+], TravelController.prototype, "createExpense", null);
 exports.TravelController = TravelController = __decorate([
     (0, swagger_1.ApiTags)('Travels'),
     (0, swagger_1.ApiBearerAuth)(),
     (0, common_1.UseGuards)(auth_guard_1.AuthGuard),
     (0, common_1.Controller)('api/v1/travels'),
-    __metadata("design:paramtypes", [travel_service_1.TravelService])
+    __metadata("design:paramtypes", [travel_service_1.TravelService,
+        travel_expense_service_1.TravelExpenseService])
 ], TravelController);
