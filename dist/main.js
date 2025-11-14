@@ -59,6 +59,22 @@ async function bootstrap() {
             integrations: [Sentry.expressIntegration()],
         });
     }
+    const resolvedLogLevel = env_1.env.logLevel?.toLowerCase() ?? 'info';
+    const loggerLevels = {
+        silent: [],
+        error: ['error'],
+        warn: ['error', 'warn'],
+        info: ['error', 'warn', 'log'],
+        debug: ['error', 'warn', 'log', 'debug'],
+        verbose: ['error', 'warn', 'log', 'debug', 'verbose'],
+    };
+    const selectedLevels = loggerLevels[resolvedLogLevel] ?? loggerLevels.info;
+    if (selectedLevels.length === 0) {
+        app.useLogger(false);
+    }
+    else {
+        app.useLogger(selectedLevels);
+    }
     const helmetOptions = {
         contentSecurityPolicy: false,
     };

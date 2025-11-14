@@ -8,6 +8,7 @@ import { SessionRecord, SessionService } from '../../services/sessionService';
 import { SupabaseService } from '../../services/supabaseService';
 import { fromSupabaseUser } from '../../utils/mappers';
 import { SocialAuthService } from '../oauth/social-auth.service';
+import { getPool } from '../../db/pool';
 
 export interface AuthSessionPayload {
   user: UserRecord;
@@ -57,6 +58,20 @@ export class AuthService {
         this.identifierCache.delete(oldestKey);
       }
     }
+  }
+
+  private async lookupEmailByIdentifier(identifier: string): Promise<string | null> {
+    const pool = await getPool();
+    const result = await pool.query(
+      `SELECT email
+       FROM profiles
+       WHERE username = $1
+          OR email ILIKE $2
+       ORDER BY CASE WHEN username = $1 THEN 0 ELSE 1 END
+       LIMIT 1`,
+      [identifier, `${identifier}@%`],
+    );
+    return result.rows[0]?.email?.toLowerCase() ?? null;
   }
 
   async createAuthSession(user: UserRecord, loginType: LoginType): Promise<AuthSessionPayload> {
@@ -118,19 +133,13 @@ export class AuthService {
       const cachedEmail = this.getCachedEmail(identifier);
       if (cachedEmail) {
         emailToUse = cachedEmail;
+        loginType = 'username';
       } else {
-        let profile;
-        try {
-          profile = await this.supabaseService.findProfileByIdentifier(identifier);
-        } catch {
+        const lookedUpEmail = await this.lookupEmailByIdentifier(identifier);
+        if (!lookedUpEmail) {
           throw new UnauthorizedException('Invalid credentials');
         }
-
-        if (!profile?.email) {
-          throw new UnauthorizedException('Invalid credentials');
-        }
-
-        emailToUse = profile.email.toLowerCase();
+        emailToUse = lookedUpEmail;
         loginType = 'username';
         this.setCachedEmail(identifier, emailToUse);
       }

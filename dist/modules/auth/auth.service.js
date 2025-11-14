@@ -24,6 +24,7 @@ const sessionService_1 = require("../../services/sessionService");
 const supabaseService_1 = require("../../services/supabaseService");
 const mappers_1 = require("../../utils/mappers");
 const social_auth_service_1 = require("../oauth/social-auth.service");
+const pool_1 = require("../../db/pool");
 let AuthService = AuthService_1 = class AuthService {
     constructor(supabaseService, jwtTokenService, sessionService, socialAuthService) {
         this.supabaseService = supabaseService;
@@ -55,6 +56,16 @@ let AuthService = AuthService_1 = class AuthService {
                 this.identifierCache.delete(oldestKey);
             }
         }
+    }
+    async lookupEmailByIdentifier(identifier) {
+        const pool = await (0, pool_1.getPool)();
+        const result = await pool.query(`SELECT email
+       FROM profiles
+       WHERE username = $1
+          OR email ILIKE $2
+       ORDER BY CASE WHEN username = $1 THEN 0 ELSE 1 END
+       LIMIT 1`, [identifier, `${identifier}@%`]);
+        return result.rows[0]?.email?.toLowerCase() ?? null;
     }
     async createAuthSession(user, loginType) {
         const session = await this.sessionService.createSession(user.id, loginType);
@@ -104,19 +115,14 @@ let AuthService = AuthService_1 = class AuthService {
             const cachedEmail = this.getCachedEmail(identifier);
             if (cachedEmail) {
                 emailToUse = cachedEmail;
+                loginType = 'username';
             }
             else {
-                let profile;
-                try {
-                    profile = await this.supabaseService.findProfileByIdentifier(identifier);
-                }
-                catch {
+                const lookedUpEmail = await this.lookupEmailByIdentifier(identifier);
+                if (!lookedUpEmail) {
                     throw new common_1.UnauthorizedException('Invalid credentials');
                 }
-                if (!profile?.email) {
-                    throw new common_1.UnauthorizedException('Invalid credentials');
-                }
-                emailToUse = profile.email.toLowerCase();
+                emailToUse = lookedUpEmail;
                 loginType = 'username';
                 this.setCachedEmail(identifier, emailToUse);
             }

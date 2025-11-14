@@ -85,19 +85,6 @@ let SupabaseService = class SupabaseService {
         }
         return data;
     }
-    async findProfileByIdentifier(identifier) {
-        const client = this.getClient();
-        const { data, error } = await client
-            .from(env_1.env.supabaseProfileTable)
-            .select('id, email, username, name')
-            .or(`username.eq.${identifier},email.ilike.${identifier}@%`)
-            .limit(1)
-            .maybeSingle();
-        if (error) {
-            throw error;
-        }
-        return data;
-    }
     // 배치로 여러 프로필 조회 (성능 최적화)
     async findProfilesByIds(ids) {
         if (ids.length === 0)

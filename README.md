@@ -187,6 +187,8 @@ src/
 - **환율 API 캐싱**: 10분 TTL로 외부 API 호출 최소화
 - **미들웨어 최적화**: 헬스체크 경로 로깅 제외
 - **N+1 쿼리 해결**: LATERAL JOIN으로 단일 쿼리 처리
+- **로그 레벨 제어**: `LOG_LEVEL` 로 Nest 로거 단계 제한 (prod에서는 `warn` 권장)
+- **DB 인덱스**: `profiles`, `travel_members`, `travel_expenses`, `user_sessions` 의 자주 쓰는 컬럼에 최적화 인덱스 적용 (SQL 아래)
 
 ### 📈 성능 개선 결과
 

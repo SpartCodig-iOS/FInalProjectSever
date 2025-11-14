@@ -26,6 +26,22 @@ async function bootstrap() {
     });
   }
 
+  const resolvedLogLevel = env.logLevel?.toLowerCase() ?? 'info';
+  const loggerLevels: Record<string, ('log' | 'error' | 'warn' | 'debug' | 'verbose')[]> = {
+    silent: [],
+    error: ['error'],
+    warn: ['error', 'warn'],
+    info: ['error', 'warn', 'log'],
+    debug: ['error', 'warn', 'log', 'debug'],
+    verbose: ['error', 'warn', 'log', 'debug', 'verbose'],
+  };
+  const selectedLevels = loggerLevels[resolvedLogLevel] ?? loggerLevels.info;
+  if (selectedLevels.length === 0) {
+    app.useLogger(false);
+  } else {
+    app.useLogger(selectedLevels);
+  }
+
   const helmetOptions: HelmetOptions = {
     contentSecurityPolicy: false,
   };
