@@ -20,14 +20,22 @@ let CacheService = CacheService_1 = class CacheService {
         this.redis = null;
         this.fallbackCache = new Map();
         this.defaultTTL = 300; // 5분
+        this.redisUrl = env_1.env.redisUrl;
+        this.redisConfigLogged = false;
     }
     async getRedisClient() {
+        if (!this.redisUrl) {
+            if (!this.redisConfigLogged) {
+                this.logger.log('🪣 Redis URL not configured - using in-memory cache only');
+                this.redisConfigLogged = true;
+            }
+            return null;
+        }
         if (this.redis)
             return this.redis;
         try {
             // Redis 연결 설정
-            const redisUrl = env_1.env.redisUrl || 'redis://localhost:6379';
-            this.redis = new ioredis_1.default(redisUrl, {
+            this.redis = new ioredis_1.default(this.redisUrl, {
                 maxRetriesPerRequest: 3,
                 connectTimeout: 3000,
                 commandTimeout: 2000,
@@ -37,7 +45,7 @@ let CacheService = CacheService_1 = class CacheService {
                 this.logger.log('🚀 Redis connected successfully');
             });
             this.redis.on('error', (err) => {
-                this.logger.warn('⚠️ Redis error, falling back to memory cache:', err.message);
+                this.logger.warn(`⚠️ Redis error, falling back to memory cache (${err.message})`);
                 this.redis = null;
             });
             this.redis.on('close', () => {
@@ -76,7 +84,7 @@ let CacheService = CacheService_1 = class CacheService {
                 }
             }
             catch (error) {
-                this.logger.warn('Redis get failed, checking fallback cache', error);
+                this.logger.warn(`Redis get failed, checking fallback cache (${this.stringifyError(error)})`);
             }
         }
         // Fallback to memory cache
@@ -97,7 +105,7 @@ let CacheService = CacheService_1 = class CacheService {
                 return;
             }
             catch (error) {
-                this.logger.warn('Redis set failed, using fallback cache', error);
+                this.logger.warn(`Redis set failed, using fallback cache (${this.stringifyError(error)})`);
             }
         }
         // Fallback to memory cache
@@ -119,7 +127,7 @@ let CacheService = CacheService_1 = class CacheService {
                 await redis.del(cacheKey);
             }
             catch (error) {
-                this.logger.warn('Redis del failed', error);
+                this.logger.warn(`Redis del failed (${this.stringifyError(error)})`);
             }
         }
         // Also remove from fallback cache
@@ -135,7 +143,7 @@ let CacheService = CacheService_1 = class CacheService {
                 return results.map(result => result ? JSON.parse(result) : null);
             }
             catch (error) {
-                this.logger.warn('Redis mget failed, using fallback', error);
+                this.logger.warn(`Redis mget failed, using fallback (${this.stringifyError(error)})`);
             }
         }
         // Fallback to individual gets
@@ -155,7 +163,7 @@ let CacheService = CacheService_1 = class CacheService {
                 return;
             }
             catch (error) {
-                this.logger.warn('Redis mset failed, using fallback', error);
+                this.logger.warn(`Redis mset failed, using fallback (${this.stringifyError(error)})`);
             }
         }
         // Fallback to individual sets
@@ -177,7 +185,7 @@ let CacheService = CacheService_1 = class CacheService {
                 }
             }
             catch (error) {
-                this.logger.warn('Redis flush failed', error);
+                this.logger.warn(`Redis flush failed (${this.stringifyError(error)})`);
             }
         }
         // Also clear fallback cache
@@ -216,6 +224,20 @@ let CacheService = CacheService_1 = class CacheService {
                 keys: Array.from(this.fallbackCache.keys()).slice(0, 10), // First 10 keys for debugging
             },
         };
+    }
+    stringifyError(error) {
+        if (!error)
+            return 'unknown error';
+        if (error instanceof Error)
+            return error.message;
+        if (typeof error === 'string')
+            return error;
+        try {
+            return JSON.stringify(error);
+        }
+        catch {
+            return String(error);
+        }
     }
 };
 exports.CacheService = CacheService;

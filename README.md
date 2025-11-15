@@ -84,6 +84,7 @@ GOOGLE_CLIENT_ID=your_google_client_id
 GOOGLE_CLIENT_SECRET=your_google_client_secret
 
 # Redis (선택)
+# REDIS_URL를 설정하지 않으면 자동으로 메모리 캐시만 사용합니다.
 REDIS_URL=redis://localhost:6379
 
 # Observability / APM

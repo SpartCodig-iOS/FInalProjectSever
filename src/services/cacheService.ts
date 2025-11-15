@@ -13,14 +13,23 @@ export class CacheService {
   private redis: Redis | null = null;
   private fallbackCache = new Map<string, { data: any; expiresAt: number }>();
   private readonly defaultTTL = 300; // 5분
+  private readonly redisUrl = env.redisUrl;
+  private redisConfigLogged = false;
 
   async getRedisClient(): Promise<Redis | null> {
+    if (!this.redisUrl) {
+      if (!this.redisConfigLogged) {
+        this.logger.log('🪣 Redis URL not configured - using in-memory cache only');
+        this.redisConfigLogged = true;
+      }
+      return null;
+    }
+
     if (this.redis) return this.redis;
 
     try {
       // Redis 연결 설정
-      const redisUrl = env.redisUrl || 'redis://localhost:6379';
-      this.redis = new Redis(redisUrl, {
+      this.redis = new Redis(this.redisUrl, {
         maxRetriesPerRequest: 3,
         connectTimeout: 3000,
         commandTimeout: 2000,
@@ -32,7 +41,7 @@ export class CacheService {
       });
 
       this.redis.on('error', (err: Error) => {
-        this.logger.warn('⚠️ Redis error, falling back to memory cache:', err.message);
+        this.logger.warn(`⚠️ Redis error, falling back to memory cache (${err.message})`);
         this.redis = null;
       });
 
@@ -75,7 +84,7 @@ export class CacheService {
           return JSON.parse(data);
         }
       } catch (error) {
-        this.logger.warn('Redis get failed, checking fallback cache', error);
+        this.logger.warn(`Redis get failed, checking fallback cache (${this.stringifyError(error)})`);
       }
     }
 
@@ -99,7 +108,7 @@ export class CacheService {
         await redis.setex(cacheKey, ttl, JSON.stringify(value));
         return;
       } catch (error) {
-        this.logger.warn('Redis set failed, using fallback cache', error);
+        this.logger.warn(`Redis set failed, using fallback cache (${this.stringifyError(error)})`);
       }
     }
 
@@ -124,7 +133,7 @@ export class CacheService {
       try {
         await redis.del(cacheKey);
       } catch (error) {
-        this.logger.warn('Redis del failed', error);
+        this.logger.warn(`Redis del failed (${this.stringifyError(error)})`);
       }
     }
 
@@ -142,7 +151,7 @@ export class CacheService {
         const results = await redis.mget(...cacheKeys);
         return results.map(result => result ? JSON.parse(result) : null);
       } catch (error) {
-        this.logger.warn('Redis mget failed, using fallback', error);
+        this.logger.warn(`Redis mget failed, using fallback (${this.stringifyError(error)})`);
       }
     }
 
@@ -164,7 +173,7 @@ export class CacheService {
         await pipeline.exec();
         return;
       } catch (error) {
-        this.logger.warn('Redis mset failed, using fallback', error);
+        this.logger.warn(`Redis mset failed, using fallback (${this.stringifyError(error)})`);
       }
     }
 
@@ -189,7 +198,7 @@ export class CacheService {
           await redis.flushdb();
         }
       } catch (error) {
-        this.logger.warn('Redis flush failed', error);
+        this.logger.warn(`Redis flush failed (${this.stringifyError(error)})`);
       }
     }
 
@@ -230,5 +239,16 @@ export class CacheService {
         keys: Array.from(this.fallbackCache.keys()).slice(0, 10), // First 10 keys for debugging
       },
     };
+  }
+
+  private stringifyError(error: unknown): string {
+    if (!error) return 'unknown error';
+    if (error instanceof Error) return error.message;
+    if (typeof error === 'string') return error;
+    try {
+      return JSON.stringify(error);
+    } catch {
+      return String(error);
+    }
   }
 }
