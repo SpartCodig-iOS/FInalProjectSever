@@ -427,7 +427,7 @@ export class AuthService {
     return { tokenPair: sessionPayload.tokenPair, loginType: sessionPayload.loginType, session: sessionPayload.session };
   }
 
-  async deleteAccount(user: UserRecord): Promise<{ supabaseDeleted: boolean }> {
+  async deleteAccount(user: UserRecord, loginTypeHint?: LoginType): Promise<{ supabaseDeleted: boolean }> {
     const startTime = Date.now();
 
     const pool = await getPool();
@@ -450,6 +450,9 @@ export class AuthService {
       } catch (error) {
         this.logger.warn('[deleteAccount] Failed to fetch profile login type via Supabase', error as Error);
       }
+    }
+    if (!profileLoginType && loginTypeHint) {
+      profileLoginType = loginTypeHint;
     }
 
     const client = await pool.connect();

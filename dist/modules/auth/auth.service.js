@@ -378,7 +378,7 @@ let AuthService = AuthService_1 = class AuthService {
         const sessionPayload = await this.createAuthSession(user, 'email');
         return { tokenPair: sessionPayload.tokenPair, loginType: sessionPayload.loginType, session: sessionPayload.session };
     }
-    async deleteAccount(user) {
+    async deleteAccount(user, loginTypeHint) {
         const startTime = Date.now();
         const pool = await (0, pool_1.getPool)();
         // 프로필 타입 조회 (DB 우선, 실패 시 Supabase)
@@ -398,6 +398,9 @@ let AuthService = AuthService_1 = class AuthService {
             catch (error) {
                 this.logger.warn('[deleteAccount] Failed to fetch profile login type via Supabase', error);
             }
+        }
+        if (!profileLoginType && loginTypeHint) {
+            profileLoginType = loginTypeHint;
         }
         const client = await pool.connect();
         try {

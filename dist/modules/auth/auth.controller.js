@@ -55,7 +55,7 @@ let AuthController = class AuthController {
         if (!currentUser) {
             throw new common_1.UnauthorizedException('Unauthorized');
         }
-        const result = await this.authService.deleteAccount(currentUser);
+        const result = await this.authService.deleteAccount(currentUser, req.loginType);
         return (0, api_1.success)({
             userID: currentUser.id,
             supabaseDeleted: result.supabaseDeleted,

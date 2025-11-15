@@ -192,7 +192,7 @@ export class AuthController {
       throw new UnauthorizedException('Unauthorized');
     }
 
-    const result = await this.authService.deleteAccount(currentUser);
+    const result = await this.authService.deleteAccount(currentUser, req.loginType);
     return success(
       {
         userID: currentUser.id,
