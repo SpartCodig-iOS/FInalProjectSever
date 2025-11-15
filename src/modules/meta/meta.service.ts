@@ -40,6 +40,13 @@ export class MetaService {
   private readonly ratePromiseCache = new Map<string, Promise<CachedRate>>();
   private readonly networkTimeout = 5000; // 5초로 더 단축 (빠른 폴백)
   private readonly maxCacheSize = 1000; // 최대 캐시 크기
+  private readonly fallbackRates: Record<string, Record<string, number>> = {
+    KRW: { USD: 0.00075, JPY: 0.107, EUR: 0.00069, CNY: 0.0052 },
+    USD: { KRW: 1340, JPY: 143, EUR: 0.91, CNY: 7.1 },
+    JPY: { KRW: 9.35, USD: 0.007, EUR: 0.0064, CNY: 0.05 },
+    EUR: { USD: 1.1, KRW: 1470, JPY: 157, CNY: 7.8 },
+    CNY: { USD: 0.141, KRW: 192, JPY: 20.1, EUR: 0.128 },
+  };
 
   // 앱 시작 시 워밍을 위한 플래그
   private isWarming = false;
@@ -223,6 +230,20 @@ export class MetaService {
       return computeResult(same);
     }
 
+    const fallbackRate = this.fallbackRates[normalizedBase]?.[normalizedQuote];
+    if (!cached && fallbackRate) {
+      const fallback: CachedRate = {
+        baseCurrency: normalizedBase,
+        quoteCurrency: normalizedQuote,
+        rate: fallbackRate,
+        date: new Date().toISOString().slice(0, 10),
+      };
+      this.rateCache.set(cacheKey, { data: fallback, expiresAt: Date.now() + this.rateCacheTTL / 2 });
+      // Trigger background refresh without blocking the response
+      this.getOrCreateRatePromise(cacheKey, normalizedBase, normalizedQuote).catch(() => {});
+      return computeResult(fallback);
+    }
+
     const rate = await this.getOrCreateRatePromise(cacheKey, normalizedBase, normalizedQuote);
     return computeResult(rate);
   }
@@ -305,14 +326,7 @@ export class MetaService {
         console.info('[MetaService] Using cached exchange rates (external API temporarily unavailable)');
         this.fallbackWarned = true;
       }
-      const fallbackRates: Record<string, Record<string, number>> = {
-        KRW: { USD: 0.00075, JPY: 0.107, EUR: 0.00069, CNY: 0.0052 },
-        USD: { KRW: 1340, JPY: 143, EUR: 0.91, CNY: 7.1 },
-        JPY: { KRW: 9.35, USD: 0.007, EUR: 0.0064, CNY: 0.05 },
-        EUR: { USD: 1.1, KRW: 1470, JPY: 157, CNY: 7.8 },
-        CNY: { USD: 0.141, KRW: 192, JPY: 20.1, EUR: 0.128 },
-      };
-      const fallbackRate = fallbackRates[base]?.[quote];
+      const fallbackRate = this.fallbackRates[base]?.[quote];
       if (!fallbackRate) {
         throw error;
       }

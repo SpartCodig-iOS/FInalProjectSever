@@ -466,7 +466,7 @@ let AuthService = AuthService_1 = class AuthService {
                 }
             }
         })();
-        await (async () => {
+        const localCleanup = (async () => {
             const client = await pool.connect();
             try {
                 await client.query('BEGIN');
@@ -521,7 +521,7 @@ let AuthService = AuthService_1 = class AuthService {
             this.cacheService.invalidateUserCache(user.id)
                 .catch((error) => this.logger.warn('[deleteAccount] User cache invalidation failed', error)),
         ]);
-        await Promise.all([supabaseDeletion, cacheCleanup]);
+        await Promise.all([localCleanup, supabaseDeletion, cacheCleanup]);
         const duration = Date.now() - startTime;
         this.logger.debug(`Fast account deletion completed in ${duration}ms for ${user.email}`);
         return { supabaseDeleted };
