@@ -11,9 +11,12 @@ const common_1 = require("@nestjs/common");
 const auth_guard_1 = require("../../common/guards/auth.guard");
 const rate_limit_guard_1 = require("../../common/guards/rate-limit.guard");
 const jwtService_1 = require("../../services/jwtService");
+const optimized_jwt_service_1 = require("../../services/optimized-jwt.service");
 const supabaseService_1 = require("../../services/supabaseService");
 const sessionService_1 = require("../../services/sessionService");
 const rateLimitService_1 = require("../../services/rateLimitService");
+const smart_cache_service_1 = require("../../services/smart-cache.service");
+const cacheService_1 = require("../../services/cacheService");
 let SharedModule = class SharedModule {
 };
 exports.SharedModule = SharedModule;
@@ -21,16 +24,22 @@ exports.SharedModule = SharedModule = __decorate([
     (0, common_1.Global)(),
     (0, common_1.Module)({
         providers: [
+            cacheService_1.CacheService,
             supabaseService_1.SupabaseService,
             jwtService_1.JwtTokenService,
+            optimized_jwt_service_1.OptimizedJwtTokenService,
+            smart_cache_service_1.SmartCacheService,
             sessionService_1.SessionService,
             rateLimitService_1.RateLimitService,
             auth_guard_1.AuthGuard,
             rate_limit_guard_1.RateLimitGuard,
         ],
         exports: [
+            cacheService_1.CacheService,
             supabaseService_1.SupabaseService,
             jwtService_1.JwtTokenService,
+            optimized_jwt_service_1.OptimizedJwtTokenService,
+            smart_cache_service_1.SmartCacheService,
             sessionService_1.SessionService,
             rateLimitService_1.RateLimitService,
             auth_guard_1.AuthGuard,

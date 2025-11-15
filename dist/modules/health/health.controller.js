@@ -18,10 +18,12 @@ const cacheService_1 = require("../../services/cacheService");
 const pool_1 = require("../../db/pool");
 const health_response_dto_1 = require("./dto/health-response.dto");
 const memory_optimizer_1 = require("../../utils/memory-optimizer");
+const smart_cache_service_1 = require("../../services/smart-cache.service");
 let HealthController = class HealthController {
-    constructor(supabaseService, cacheService) {
+    constructor(supabaseService, cacheService, smartCacheService) {
         this.supabaseService = supabaseService;
         this.cacheService = cacheService;
+        this.smartCacheService = smartCacheService;
     }
     async health() {
         const database = await this.supabaseService.checkProfilesHealth();
@@ -77,6 +79,14 @@ let HealthController = class HealthController {
                 keepAliveEnabled: true,
                 memoryCacheEnabled: true,
                 performanceMonitoringEnabled: true,
+                smartCache: this.smartCacheService.getStats(),
+                apiOptimization: {
+                    total: 0,
+                    averageResponseTime: 0,
+                    slowQueries: [],
+                    cacheHitRate: 0,
+                    endpointStats: {}
+                },
             },
             timestamp: new Date().toISOString(),
         });
@@ -165,5 +175,6 @@ exports.HealthController = HealthController = __decorate([
     (0, swagger_1.ApiTags)('Health'),
     (0, common_1.Controller)(),
     __metadata("design:paramtypes", [supabaseService_1.SupabaseService,
-        cacheService_1.CacheService])
+        cacheService_1.CacheService,
+        smart_cache_service_1.SmartCacheService])
 ], HealthController);

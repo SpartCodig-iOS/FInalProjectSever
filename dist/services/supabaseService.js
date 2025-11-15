@@ -125,15 +125,65 @@ let SupabaseService = class SupabaseService {
     async findProfilesByIds(ids) {
         if (ids.length === 0)
             return [];
-        const client = this.getClient();
-        const { data, error } = await client
-            .from(env_1.env.supabaseProfileTable)
-            .select('id, email, username, name, login_type')
-            .in('id', ids);
-        if (error) {
-            throw error;
+        // 중복 ID 제거
+        const uniqueIds = Array.from(new Set(ids));
+        // 배치 크기 제한 (PostgreSQL의 IN 절 최대 한계 고려)
+        const BATCH_SIZE = 1000;
+        const results = [];
+        for (let i = 0; i < uniqueIds.length; i += BATCH_SIZE) {
+            const batch = uniqueIds.slice(i, i + BATCH_SIZE);
+            const client = this.getClient();
+            const { data, error } = await client
+                .from(env_1.env.supabaseProfileTable)
+                .select('id, email, username, name, login_type, avatar_url, created_at, updated_at')
+                .in('id', batch)
+                .order('username'); // 정렬로 인덱스 활용
+            if (error) {
+                throw error;
+            }
+            if (data) {
+                results.push(...data);
+            }
         }
-        return data || [];
+        // 원본 순서 유지를 위한 맵 생성
+        const profileMap = new Map(results.map(profile => [profile.id, profile]));
+        return ids.map(id => profileMap.get(id)).filter(Boolean);
+    }
+    // 프로필 캐시를 위한 새로운 메서드
+    async findProfilesByIdsWithCache(ids, cacheService) {
+        if (ids.length === 0)
+            return [];
+        const uniqueIds = Array.from(new Set(ids));
+        const profiles = [];
+        const uncachedIds = [];
+        // 캐시에서 먼저 조회
+        if (cacheService) {
+            for (const id of uniqueIds) {
+                const cached = await cacheService.get(`profile:${id}`, { ttl: 300 }); // 5분 캐시
+                if (cached) {
+                    profiles.push(cached);
+                }
+                else {
+                    uncachedIds.push(id);
+                }
+            }
+        }
+        else {
+            uncachedIds.push(...uniqueIds);
+        }
+        // 캐시되지 않은 프로필들을 배치로 조회
+        if (uncachedIds.length > 0) {
+            const uncachedProfiles = await this.findProfilesByIds(uncachedIds);
+            // 조회한 프로필들을 캐시에 저장
+            if (cacheService) {
+                const cachePromises = uncachedProfiles.map(profile => cacheService.set(`profile:${profile?.id}`, profile, { ttl: 300 }));
+                await Promise.allSettled(cachePromises); // 캐시 실패가 메인 로직에 영향 안 줌
+            }
+            profiles.push(...uncachedProfiles);
+        }
+        // 원본 순서 유지
+        const profileMap = new Map(profiles.map(profile => [profile.id, profile]));
+        return ids.map(id => profileMap.get(id)).filter(Boolean);
     }
     async upsertProfile(params) {
         const client = this.getClient();

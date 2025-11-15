@@ -22,6 +22,7 @@ const travel_expense_module_1 = require("./modules/travel-expense/travel-expense
 const travel_settlement_module_1 = require("./modules/travel-settlement/travel-settlement.module");
 const performance_interceptor_1 = require("./common/interceptors/performance.interceptor");
 const response_transform_filter_1 = require("./common/filters/response-transform.filter");
+const api_optimization_interceptor_1 = require("./common/interceptors/api-optimization.interceptor");
 let AppModule = class AppModule {
     configure(consumer) {
         consumer.apply(requestLogger_1.RequestLoggerMiddleware).forRoutes('*');
@@ -50,6 +51,10 @@ exports.AppModule = AppModule = __decorate([
             {
                 provide: core_1.APP_INTERCEPTOR,
                 useClass: response_transform_filter_1.ResponseTransformInterceptor,
+            },
+            {
+                provide: core_1.APP_INTERCEPTOR,
+                useClass: api_optimization_interceptor_1.ApiOptimizationInterceptor,
             },
         ],
     })

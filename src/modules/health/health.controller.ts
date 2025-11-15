@@ -6,6 +6,7 @@ import { CacheService } from '../../services/cacheService';
 import { getPoolStats } from '../../db/pool';
 import { HealthResponseDto } from './dto/health-response.dto';
 import { MemoryOptimizer } from '../../utils/memory-optimizer';
+import { SmartCacheService } from '../../services/smart-cache.service';
 
 @ApiTags('Health')
 @Controller()
@@ -13,6 +14,7 @@ export class HealthController {
   constructor(
     private readonly supabaseService: SupabaseService,
     private readonly cacheService: CacheService,
+    private readonly smartCacheService: SmartCacheService,
   ) {}
 
   @Get('health')
@@ -145,6 +147,14 @@ export class HealthController {
         keepAliveEnabled: true,
         memoryCacheEnabled: true,
         performanceMonitoringEnabled: true,
+        smartCache: this.smartCacheService.getStats(),
+        apiOptimization: {
+          total: 0,
+          averageResponseTime: 0,
+          slowQueries: [],
+          cacheHitRate: 0,
+          endpointStats: {}
+        },
       },
       timestamp: new Date().toISOString(),
     });

@@ -13,6 +13,7 @@ import { TravelExpenseModule } from './modules/travel-expense/travel-expense.mod
 import { TravelSettlementModule } from './modules/travel-settlement/travel-settlement.module';
 import { PerformanceInterceptor } from './common/interceptors/performance.interceptor';
 import { ResponseTransformInterceptor } from './common/filters/response-transform.filter';
+import { ApiOptimizationInterceptor } from './common/interceptors/api-optimization.interceptor';
 
 @Module({
   imports: [
@@ -35,6 +36,10 @@ import { ResponseTransformInterceptor } from './common/filters/response-transfor
     {
       provide: APP_INTERCEPTOR,
       useClass: ResponseTransformInterceptor,
+    },
+    {
+      provide: APP_INTERCEPTOR,
+      useClass: ApiOptimizationInterceptor,
     },
   ],
 })
