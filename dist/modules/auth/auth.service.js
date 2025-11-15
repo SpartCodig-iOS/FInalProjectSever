@@ -402,6 +402,50 @@ let AuthService = AuthService_1 = class AuthService {
         if (!profileLoginType && loginTypeHint) {
             profileLoginType = loginTypeHint;
         }
+        let appleRefreshToken = null;
+        let googleRefreshToken = null;
+        if (profileLoginType === 'apple') {
+            try {
+                appleRefreshToken = await this.supabaseService.getAppleRefreshToken(user.id);
+            }
+            catch (error) {
+                this.logger.warn('[deleteAccount] Failed to load Apple refresh token', error);
+            }
+        }
+        else if (profileLoginType === 'google') {
+            try {
+                googleRefreshToken = await this.supabaseService.getGoogleRefreshToken(user.id);
+            }
+            catch (error) {
+                this.logger.warn('[deleteAccount] Failed to load Google refresh token', error);
+            }
+        }
+        if (profileLoginType === 'apple') {
+            if (appleRefreshToken) {
+                try {
+                    await this.socialAuthService.revokeAppleConnection(user.id, appleRefreshToken);
+                }
+                catch (error) {
+                    this.logger.warn('[deleteAccount] Apple revoke failed', error);
+                }
+            }
+            else {
+                this.logger.warn('[deleteAccount] Apple refresh token missing, skipping revoke');
+            }
+        }
+        else if (profileLoginType === 'google') {
+            if (googleRefreshToken) {
+                try {
+                    await this.socialAuthService.revokeGoogleConnection(user.id, googleRefreshToken);
+                }
+                catch (error) {
+                    this.logger.warn('[deleteAccount] Google revoke failed', error);
+                }
+            }
+            else {
+                this.logger.warn('[deleteAccount] Google refresh token missing, skipping revoke');
+            }
+        }
         const client = await pool.connect();
         try {
             await client.query('BEGIN');
@@ -448,19 +492,10 @@ let AuthService = AuthService_1 = class AuthService {
         if (user.username) {
             this.identifierCache.delete(user.username.toLowerCase());
         }
-        const socialRevokePromise = profileLoginType === 'apple'
-            ? this.socialAuthService
-                .revokeAppleConnection(user.id)
-                .catch((error) => this.logger.warn('[deleteAccount] Apple revoke failed', error))
-            : profileLoginType === 'google'
-                ? this.socialAuthService
-                    .revokeGoogleConnection(user.id)
-                    .catch((error) => this.logger.warn('[deleteAccount] Google revoke failed', error))
-                : Promise.resolve();
         const oauthCacheCleanup = this.socialAuthService
             .invalidateOAuthCacheByUser(user.id)
             .catch((error) => this.logger.warn('[deleteAccount] OAuth cache cleanup failed', error));
-        await Promise.all([socialRevokePromise, oauthCacheCleanup]);
+        await oauthCacheCleanup;
         const duration = Date.now() - startTime;
         this.logger.debug(`Fast account deletion completed in ${duration}ms for ${user.email}`);
         return { supabaseDeleted };
