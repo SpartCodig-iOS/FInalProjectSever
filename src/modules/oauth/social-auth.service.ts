@@ -8,6 +8,7 @@ import { CacheService } from '../../services/cacheService';
 import { AuthService, AuthSessionPayload } from '../auth/auth.service';
 import { fromSupabaseUser } from '../../utils/mappers';
 import { env } from '../../config/env';
+import { getPool } from '../../db/pool';
 
 export interface SocialLookupResult {
   registered: boolean;
@@ -61,6 +62,15 @@ export class SocialAuthService {
 
   private getTokenCacheKey(accessToken: string): string {
     return createHash('sha256').update(accessToken).digest('hex');
+  }
+
+  private async profileExists(userId: string): Promise<boolean> {
+    const pool = await getPool();
+    const result = await pool.query(
+      `SELECT 1 FROM profiles WHERE id = $1 LIMIT 1`,
+      [userId],
+    );
+    return Boolean(result.rows[0]);
   }
 
   // Redis 기반 OAuth 사용자 캐시 (fallback으로 내부 CacheService 메모리 캐시 사용)
@@ -200,9 +210,7 @@ export class SocialAuthService {
     }
 
     // 캐시 미스: 사용자 정보 조회 및 프로필 생성을 병렬 처리
-    const [supabaseUser] = await Promise.all([
-      this.supabaseService.getUserFromToken(accessToken)
-    ]);
+    const supabaseUser = await this.supabaseService.getUserFromToken(accessToken);
 
     if (!supabaseUser) {
       throw new UnauthorizedException('Invalid Supabase access token');
@@ -211,9 +219,11 @@ export class SocialAuthService {
     // 프로필 생성과 토큰 교환을 병렬로 처리
     const { appleRefreshToken, googleRefreshToken, authorizationCode, codeVerifier, redirectUri } = options;
 
-    const tasks: Promise<any>[] = [
-      this.supabaseService.ensureProfileFromSupabaseUser(supabaseUser, loginType)
-    ];
+    const profileExists = await this.profileExists(supabaseUser.id);
+    const profileTasks: Promise<any>[] = [];
+    if (!profileExists) {
+      profileTasks.push(this.supabaseService.ensureProfileFromSupabaseUser(supabaseUser, loginType));
+    }
 
     // 토큰 교환 작업들을 병렬로 추가
     let appleTokenPromise: Promise<string | null> = Promise.resolve(appleRefreshToken || null);
@@ -232,7 +242,7 @@ export class SocialAuthService {
 
     // 모든 비동기 작업을 병렬로 실행
     const [, finalAppleRefreshToken, finalGoogleRefreshToken] = await Promise.all([
-      ...tasks,
+      ...profileTasks,
       appleTokenPromise,
       googleTokenPromise
     ]);
