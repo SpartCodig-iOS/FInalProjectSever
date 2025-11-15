@@ -9,11 +9,14 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.HealthModule = void 0;
 const common_1 = require("@nestjs/common");
 const health_controller_1 = require("./health.controller");
+const cacheService_1 = require("../../services/cacheService");
+const supabaseService_1 = require("../../services/supabaseService");
 let HealthModule = class HealthModule {
 };
 exports.HealthModule = HealthModule;
 exports.HealthModule = HealthModule = __decorate([
     (0, common_1.Module)({
         controllers: [health_controller_1.HealthController],
+        providers: [cacheService_1.CacheService, supabaseService_1.SupabaseService],
     })
 ], HealthModule);

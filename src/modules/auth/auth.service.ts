@@ -560,11 +560,17 @@ export class AuthService {
       this.identifierCache.delete(user.username.toLowerCase());
     }
 
-    const oauthCacheCleanup = this.socialAuthService
-      .invalidateOAuthCacheByUser(user.id)
-      .catch((error) => this.logger.warn('[deleteAccount] OAuth cache cleanup failed', error as Error));
+    const cacheCleanup = Promise.all([
+      // OAuth 캐시 정리
+      this.socialAuthService.invalidateOAuthCacheByUser(user.id)
+        .catch((error) => this.logger.warn('[deleteAccount] OAuth cache cleanup failed', error as Error)),
 
-    await Promise.all([supabaseDeletion, oauthCacheCleanup]);
+      // 사용자 관련 모든 캐시 무효화 (새로운 Redis 캐시 무효화 전략)
+      this.cacheService.invalidateUserCache(user.id)
+        .catch((error) => this.logger.warn('[deleteAccount] User cache invalidation failed', error as Error)),
+    ]);
+
+    await Promise.all([supabaseDeletion, cacheCleanup]);
 
     const duration = Date.now() - startTime;
     this.logger.debug(`Fast account deletion completed in ${duration}ms for ${user.email}`);

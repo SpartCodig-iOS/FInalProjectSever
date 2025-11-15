@@ -142,6 +142,93 @@ export class CacheService {
     this.fallbackCache.delete(fallbackKey);
   }
 
+  /**
+   * 패턴 기반 캐시 무효화
+   * 예: delPattern('user:*') - 모든 user 관련 캐시 삭제
+   */
+  async delPattern(pattern: string): Promise<number> {
+    const redis = await this.getRedisClient();
+    let deletedCount = 0;
+
+    if (redis) {
+      try {
+        const keys = await redis.keys(pattern);
+        if (keys.length > 0) {
+          deletedCount = await redis.del(...keys);
+          this.logger.debug(`Deleted ${deletedCount} keys matching pattern: ${pattern}`);
+        }
+      } catch (error) {
+        this.logger.warn(`Redis pattern delete failed (${this.stringifyError(error)})`);
+      }
+    }
+
+    // Fallback cache pattern cleanup
+    const fallbackKeys = Array.from(this.fallbackCache.keys()).filter(key =>
+      this.matchPattern(key, pattern)
+    );
+    fallbackKeys.forEach(key => this.fallbackCache.delete(key));
+
+    return deletedCount + fallbackKeys.length;
+  }
+
+  /**
+   * 태그 기반 캐시 무효화
+   * 사용자 관련 모든 캐시를 한번에 무효화할 때 유용
+   */
+  async invalidateByTags(tags: string[]): Promise<number> {
+    let totalDeleted = 0;
+
+    for (const tag of tags) {
+      const deleted = await this.delPattern(`*:${tag}:*`);
+      totalDeleted += deleted;
+    }
+
+    this.logger.debug(`Invalidated ${totalDeleted} cache entries for tags: ${tags.join(', ')}`);
+    return totalDeleted;
+  }
+
+  /**
+   * 사용자별 캐시 완전 무효화
+   * 프로필 수정, 탈퇴 등에 사용
+   */
+  async invalidateUserCache(userId: string): Promise<void> {
+    const patterns = [
+      `user:${userId}`,           // 사용자 기본 정보
+      `auth:${userId}:*`,         // 인증 관련 캐시
+      `oauth:user-index:${userId}`, // OAuth 토큰 인덱스
+      `travel:user:${userId}:*`,  // 여행 관련 캐시
+      `session:${userId}:*`,      // 세션 관련 캐시
+    ];
+
+    let totalDeleted = 0;
+    for (const pattern of patterns) {
+      totalDeleted += await this.delPattern(pattern);
+    }
+
+    this.logger.debug(`Invalidated ${totalDeleted} cache entries for user ${userId}`);
+  }
+
+  /**
+   * 여행별 캐시 무효화
+   * 여행 정보 수정, 멤버 추가/제거 등에 사용
+   */
+  async invalidateTravelCache(travelId: string): Promise<void> {
+    const patterns = [
+      `travel:${travelId}`,       // 여행 기본 정보
+      `travel:${travelId}:*`,     // 여행 관련 모든 하위 캐시
+      `expense:${travelId}:*`,    // 비용 관련 캐시
+      `settlement:${travelId}:*`, // 정산 관련 캐시
+      `members:${travelId}`,      // 멤버 목록 캐시
+    ];
+
+    let totalDeleted = 0;
+    for (const pattern of patterns) {
+      totalDeleted += await this.delPattern(pattern);
+    }
+
+    this.logger.debug(`Invalidated ${totalDeleted} cache entries for travel ${travelId}`);
+  }
+
   async mget<T>(keys: string[], config: CacheConfig = {}): Promise<(T | null)[]> {
     const redis = await this.getRedisClient();
 
@@ -239,6 +326,20 @@ export class CacheService {
         keys: Array.from(this.fallbackCache.keys()).slice(0, 10), // First 10 keys for debugging
       },
     };
+  }
+
+  /**
+   * 와일드카드 패턴 매칭 헬퍼
+   * Redis KEYS 명령어 스타일의 패턴 매칭
+   */
+  private matchPattern(key: string, pattern: string): boolean {
+    // * 를 .* 로 변환하여 정규식으로 변환
+    const regexPattern = pattern
+      .replace(/[.*+?^${}()|[\]\\]/g, '\\$&') // 특수문자 이스케이프
+      .replace(/\\\*/g, '.*'); // \* 를 .* 로 변환
+
+    const regex = new RegExp(`^${regexPattern}$`);
+    return regex.test(key);
   }
 
   private stringifyError(error: unknown): string {

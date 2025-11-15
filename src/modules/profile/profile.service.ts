@@ -6,6 +6,7 @@ import { createClient } from '@supabase/supabase-js';
 import { env } from '../../config/env';
 import { randomUUID } from 'crypto';
 import { Express } from 'express';
+import { CacheService } from '../../services/cacheService';
 import 'multer';
 
 @Injectable()
@@ -13,6 +14,8 @@ export class ProfileService {
   private readonly logger = new Logger(ProfileService.name);
   private readonly storageClient = createClient(env.supabaseUrl, env.supabaseServiceRoleKey);
   private readonly avatarBucket = 'profileimages';
+
+  constructor(private readonly cacheService: CacheService) {}
 
   // 프로필 캐시: 10분 TTL, 최대 1000개
   private readonly profileCache = new Map<string, { data: UserRecord; expiresAt: number }>();
@@ -132,7 +135,14 @@ export class ProfileService {
       updated_at: row.updated_at,
       password_hash: '',
     };
+
+    // 캐시 무효화 - 메모리와 Redis 모두
     this.setCachedProfile(userId, updated);
+
+    // Redis에서 사용자 관련 모든 캐시 무효화 (비동기로 실행하여 응답 속도 영향 최소화)
+    this.cacheService.invalidateUserCache(userId)
+      .catch((error) => this.logger.warn(`Profile cache invalidation failed for user ${userId}:`, error));
+
     return updated;
   }
 

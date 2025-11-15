@@ -56,7 +56,7 @@ async function bootstrap() {
             dsn: env_1.env.sentryDsn,
             environment: env_1.env.nodeEnv,
             tracesSampleRate: env_1.env.sentryTracesSampleRate,
-            profilesSampleRate: env_1.env.sentryProfilesSampleRate,
+            profilesSampleRate: 0.1, // 10% 프로파일링 샘플링
             integrations: [Sentry.expressIntegration()],
         });
         if (client) {
@@ -85,10 +85,27 @@ async function bootstrap() {
     };
     app.use((0, helmet_1.default)(helmetOptions));
     app.use((0, compression_1.default)({
-        threshold: 1024,
+        threshold: 1024, // 1KB 이상일 때만 압축
+        level: 6, // 압축 레벨 (1: 빠름, 9: 최고 압축률, 6: 균형)
+        memLevel: 8, // 메모리 사용량 레벨 (1-9, 높을수록 빠름)
+        chunkSize: 16384, // 청크 크기 (16KB)
+        windowBits: 15, // 압축 윈도우 크기
         filter: (req, res) => {
+            // 압축 제외 조건
             if (req.headers['x-no-compression']) {
                 return false;
+            }
+            // 이미 압축된 파일 타입 제외
+            const contentType = res.getHeader('content-type');
+            if (contentType) {
+                const skipCompressionTypes = [
+                    'image/', 'video/', 'audio/',
+                    'application/zip', 'application/gzip',
+                    'application/x-rar', 'application/pdf',
+                ];
+                if (skipCompressionTypes.some(type => contentType.includes(type))) {
+                    return false;
+                }
             }
             return compression_1.default.filter(req, res);
         },

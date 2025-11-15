@@ -5,6 +5,9 @@ var __decorate = (this && this.__decorate) || function (decorators, target, key,
     else for (var i = decorators.length - 1; i >= 0; i--) if (d = decorators[i]) r = (c < 3 ? d(r) : c > 3 ? d(target, key, r) : d(target, key)) || r;
     return c > 3 && r && Object.defineProperty(target, key, r), r;
 };
+var __metadata = (this && this.__metadata) || function (k, v) {
+    if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
+};
 var ProfileService_1;
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.ProfileService = void 0;
@@ -13,9 +16,11 @@ const pool_1 = require("../../db/pool");
 const supabase_js_1 = require("@supabase/supabase-js");
 const env_1 = require("../../config/env");
 const crypto_1 = require("crypto");
+const cacheService_1 = require("../../services/cacheService");
 require("multer");
 let ProfileService = ProfileService_1 = class ProfileService {
-    constructor() {
+    constructor(cacheService) {
+        this.cacheService = cacheService;
         this.logger = new common_1.Logger(ProfileService_1.name);
         this.storageClient = (0, supabase_js_1.createClient)(env_1.env.supabaseUrl, env_1.env.supabaseServiceRoleKey);
         this.avatarBucket = 'profileimages';
@@ -117,7 +122,11 @@ let ProfileService = ProfileService_1 = class ProfileService {
             updated_at: row.updated_at,
             password_hash: '',
         };
+        // 캐시 무효화 - 메모리와 Redis 모두
         this.setCachedProfile(userId, updated);
+        // Redis에서 사용자 관련 모든 캐시 무효화 (비동기로 실행하여 응답 속도 영향 최소화)
+        this.cacheService.invalidateUserCache(userId)
+            .catch((error) => this.logger.warn(`Profile cache invalidation failed for user ${userId}:`, error));
         return updated;
     }
     async uploadToSupabase(userId, file) {
@@ -151,5 +160,6 @@ let ProfileService = ProfileService_1 = class ProfileService {
 };
 exports.ProfileService = ProfileService;
 exports.ProfileService = ProfileService = ProfileService_1 = __decorate([
-    (0, common_1.Injectable)()
+    (0, common_1.Injectable)(),
+    __metadata("design:paramtypes", [cacheService_1.CacheService])
 ], ProfileService);

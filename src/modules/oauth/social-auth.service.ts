@@ -221,7 +221,9 @@ export class SocialAuthService {
 
     const profileExists = await this.profileExists(supabaseUser.id);
     const profileTasks: Promise<any>[] = [];
-    if (!profileExists) {
+
+    // 프로필이 존재하지 않거나, 소셜 로그인 타입을 업데이트해야 하는 경우
+    if (!profileExists || (loginType !== 'email' && loginType !== 'username')) {
       profileTasks.push(this.supabaseService.ensureProfileFromSupabaseUser(supabaseUser, loginType));
     }
 
