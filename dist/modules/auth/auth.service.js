@@ -383,9 +383,19 @@ let AuthService = AuthService_1 = class AuthService {
         const pool = await (0, pool_1.getPool)();
         // 프로필 타입 조회 (DB 우선, 실패 시 Supabase)
         let profileLoginType = null;
+        let appleRefreshToken = null;
+        let googleRefreshToken = null;
         try {
-            const directProfile = await pool.query(`SELECT login_type FROM profiles WHERE id = $1 LIMIT 1`, [user.id]);
-            profileLoginType = directProfile.rows[0]?.login_type ?? null;
+            const directProfile = await pool.query(`SELECT login_type, apple_refresh_token, google_refresh_token
+         FROM profiles
+         WHERE id = $1
+         LIMIT 1`, [user.id]);
+            const profileRow = directProfile.rows[0];
+            if (profileRow) {
+                profileLoginType = profileRow.login_type ?? null;
+                appleRefreshToken = profileRow.apple_refresh_token ?? null;
+                googleRefreshToken = profileRow.google_refresh_token ?? null;
+            }
         }
         catch (error) {
             this.logger.warn('[deleteAccount] Failed to fetch profile login type from DB', error);
@@ -399,12 +409,18 @@ let AuthService = AuthService_1 = class AuthService {
                 this.logger.warn('[deleteAccount] Failed to fetch profile login type via Supabase', error);
             }
         }
+        if (!profileLoginType) {
+            if (appleRefreshToken) {
+                profileLoginType = 'apple';
+            }
+            else if (googleRefreshToken) {
+                profileLoginType = 'google';
+            }
+        }
         if (!profileLoginType && loginTypeHint) {
             profileLoginType = loginTypeHint;
         }
-        let appleRefreshToken = null;
-        let googleRefreshToken = null;
-        if (profileLoginType === 'apple') {
+        if (profileLoginType === 'apple' && !appleRefreshToken) {
             try {
                 appleRefreshToken = await this.supabaseService.getAppleRefreshToken(user.id);
             }
@@ -412,7 +428,7 @@ let AuthService = AuthService_1 = class AuthService {
                 this.logger.warn('[deleteAccount] Failed to load Apple refresh token', error);
             }
         }
-        else if (profileLoginType === 'google') {
+        else if (profileLoginType === 'google' && !googleRefreshToken) {
             try {
                 googleRefreshToken = await this.supabaseService.getGoogleRefreshToken(user.id);
             }

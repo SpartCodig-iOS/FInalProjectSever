@@ -434,12 +434,23 @@ export class AuthService {
 
     // 프로필 타입 조회 (DB 우선, 실패 시 Supabase)
     let profileLoginType: LoginType | null = null;
+    let appleRefreshToken: string | null = null;
+    let googleRefreshToken: string | null = null;
+
     try {
       const directProfile = await pool.query(
-        `SELECT login_type FROM profiles WHERE id = $1 LIMIT 1`,
+        `SELECT login_type, apple_refresh_token, google_refresh_token
+         FROM profiles
+         WHERE id = $1
+         LIMIT 1`,
         [user.id],
       );
-      profileLoginType = (directProfile.rows[0]?.login_type as LoginType | null) ?? null;
+      const profileRow = directProfile.rows[0];
+      if (profileRow) {
+        profileLoginType = (profileRow.login_type as LoginType | null) ?? null;
+        appleRefreshToken = (profileRow.apple_refresh_token as string | null) ?? null;
+        googleRefreshToken = (profileRow.google_refresh_token as string | null) ?? null;
+      }
     } catch (error) {
       this.logger.warn('[deleteAccount] Failed to fetch profile login type from DB', error as Error);
     }
@@ -451,19 +462,24 @@ export class AuthService {
         this.logger.warn('[deleteAccount] Failed to fetch profile login type via Supabase', error as Error);
       }
     }
+    if (!profileLoginType) {
+      if (appleRefreshToken) {
+        profileLoginType = 'apple';
+      } else if (googleRefreshToken) {
+        profileLoginType = 'google';
+      }
+    }
     if (!profileLoginType && loginTypeHint) {
       profileLoginType = loginTypeHint;
     }
 
-    let appleRefreshToken: string | null = null;
-    let googleRefreshToken: string | null = null;
-    if (profileLoginType === 'apple') {
+    if (profileLoginType === 'apple' && !appleRefreshToken) {
       try {
         appleRefreshToken = await this.supabaseService.getAppleRefreshToken(user.id);
       } catch (error) {
         this.logger.warn('[deleteAccount] Failed to load Apple refresh token', error as Error);
       }
-    } else if (profileLoginType === 'google') {
+    } else if (profileLoginType === 'google' && !googleRefreshToken) {
       try {
         googleRefreshToken = await this.supabaseService.getGoogleRefreshToken(user.id);
       } catch (error) {
