@@ -209,6 +209,54 @@ let TravelExpenseService = class TravelExpenseService {
             })),
         };
     }
+    /**
+     * 지출을 삭제합니다.
+     * 권한: 지출 작성자 또는 여행 호스트만 삭제 가능
+     */
+    async deleteExpense(travelId, expenseId, userId) {
+        const pool = await (0, pool_1.getPool)();
+        // 1. 사용자가 여행 멤버인지 확인
+        const context = await this.getTravelContext(travelId, userId);
+        // 2. 지출 정보 조회 및 권한 확인
+        const expenseResult = await pool.query(`SELECT
+         e.id::text,
+         e.travel_id::text,
+         e.payer_id::text,
+         t.owner_id::text
+       FROM travel_expenses e
+       INNER JOIN travels t ON t.id = e.travel_id
+       WHERE e.id = $1 AND e.travel_id = $2`, [expenseId, travelId]);
+        const expense = expenseResult.rows[0];
+        if (!expense) {
+            throw new common_1.NotFoundException('지출을 찾을 수 없습니다.');
+        }
+        // 3. 권한 확인: 지출 작성자 OR 여행 호스트만 삭제 가능
+        const isExpensePayer = expense.payer_id === userId;
+        const isTravelOwner = expense.owner_id === userId;
+        if (!isExpensePayer && !isTravelOwner) {
+            throw new common_1.ForbiddenException('지출 작성자 또는 여행 호스트만 삭제할 수 있습니다.');
+        }
+        // 4. 트랜잭션으로 지출 및 관련 데이터 삭제
+        const client = await pool.connect();
+        try {
+            await client.query('BEGIN');
+            // 참여자 정보 먼저 삭제 (외래키 제약)
+            await client.query(`DELETE FROM travel_expense_participants WHERE expense_id = $1`, [expenseId]);
+            // 지출 정보 삭제
+            const deleteResult = await client.query(`DELETE FROM travel_expenses WHERE id = $1 AND travel_id = $2`, [expenseId, travelId]);
+            if (deleteResult.rowCount === 0) {
+                throw new common_1.NotFoundException('삭제할 지출을 찾을 수 없습니다.');
+            }
+            await client.query('COMMIT');
+        }
+        catch (error) {
+            await client.query('ROLLBACK');
+            throw error;
+        }
+        finally {
+            client.release();
+        }
+    }
 };
 exports.TravelExpenseService = TravelExpenseService;
 exports.TravelExpenseService = TravelExpenseService = __decorate([

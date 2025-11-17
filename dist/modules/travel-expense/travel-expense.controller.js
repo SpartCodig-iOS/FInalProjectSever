@@ -41,6 +41,13 @@ let TravelExpenseController = class TravelExpenseController {
         const expense = await this.travelExpenseService.createExpense(travelId, req.currentUser.id, payload);
         return (0, api_1.success)(expense, 'Expense created');
     }
+    async deleteExpense(travelId, expenseId, req) {
+        if (!req.currentUser) {
+            throw new common_1.UnauthorizedException('Unauthorized');
+        }
+        await this.travelExpenseService.deleteExpense(travelId, expenseId, req.currentUser.id);
+        return (0, api_1.success)(null, 'Expense deleted');
+    }
 };
 exports.TravelExpenseController = TravelExpenseController;
 __decorate([
@@ -88,6 +95,27 @@ __decorate([
     __metadata("design:paramtypes", [String, Object, Object]),
     __metadata("design:returntype", Promise)
 ], TravelExpenseController.prototype, "create", null);
+__decorate([
+    (0, common_1.Delete)(':expenseId'),
+    (0, common_1.HttpCode)(common_1.HttpStatus.OK),
+    (0, swagger_1.ApiOperation)({ summary: '여행 지출 삭제' }),
+    (0, swagger_1.ApiOkResponse)({
+        schema: {
+            type: 'object',
+            properties: {
+                code: { type: 'number', example: 200 },
+                message: { type: 'string', example: 'Expense deleted' },
+                data: { type: 'null' }
+            }
+        }
+    }),
+    __param(0, (0, common_1.Param)('travelId')),
+    __param(1, (0, common_1.Param)('expenseId')),
+    __param(2, (0, common_1.Req)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String, String, Object]),
+    __metadata("design:returntype", Promise)
+], TravelExpenseController.prototype, "deleteExpense", null);
 exports.TravelExpenseController = TravelExpenseController = __decorate([
     (0, swagger_1.ApiTags)('Travel Expenses'),
     (0, swagger_1.ApiBearerAuth)(),

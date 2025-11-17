@@ -1,4 +1,4 @@
-import { Body, Controller, Get, HttpCode, HttpStatus, Param, Post, Req, UnauthorizedException, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, HttpCode, HttpStatus, Param, Post, Req, UnauthorizedException, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiBody, ApiOkResponse, ApiOperation, ApiQuery, ApiTags } from '@nestjs/swagger';
 import { AuthGuard } from '../../common/guards/auth.guard';
 import { RequestWithUser } from '../../types/request';
@@ -65,5 +65,30 @@ export class TravelExpenseController {
     const payload = createExpenseSchema.parse(body);
     const expense = await this.travelExpenseService.createExpense(travelId, req.currentUser.id, payload);
     return success(expense, 'Expense created');
+  }
+
+  @Delete(':expenseId')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: '여행 지출 삭제' })
+  @ApiOkResponse({
+    schema: {
+      type: 'object',
+      properties: {
+        code: { type: 'number', example: 200 },
+        message: { type: 'string', example: 'Expense deleted' },
+        data: { type: 'null' }
+      }
+    }
+  })
+  async deleteExpense(
+    @Param('travelId') travelId: string,
+    @Param('expenseId') expenseId: string,
+    @Req() req: RequestWithUser,
+  ) {
+    if (!req.currentUser) {
+      throw new UnauthorizedException('Unauthorized');
+    }
+    await this.travelExpenseService.deleteExpense(travelId, expenseId, req.currentUser.id);
+    return success(null, 'Expense deleted');
   }
 }
