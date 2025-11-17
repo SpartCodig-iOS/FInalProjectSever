@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   Delete,
@@ -33,13 +34,27 @@ export class TravelController {
   @ApiOkResponse({ type: TravelSummaryDto, isArray: true })
   @ApiQuery({ name: 'page', required: false, type: Number, example: 1 })
   @ApiQuery({ name: 'limit', required: false, type: Number, example: 20 })
+  @ApiQuery({
+    name: 'status',
+    required: false,
+    enum: ['active', 'inactive'],
+    description: '여행 상태에 따라 목록을 필터링합니다.',
+  })
   async list(@Req() req: RequestWithUser, @Req() request: RequestWithUser) {
     if (!req.currentUser) {
       throw new UnauthorizedException('Unauthorized');
     }
     const page = Number((request.query?.page as string) ?? '1') || 1;
     const limit = Number((request.query?.limit as string) ?? '20') || 20;
-    const result = await this.travelService.listTravels(req.currentUser.id, { page, limit });
+    const requestedStatus = (request.query?.status as string | undefined)?.toLowerCase();
+    let status: 'active' | 'inactive' | undefined;
+    if (requestedStatus) {
+      if (requestedStatus !== 'active' && requestedStatus !== 'inactive') {
+        throw new BadRequestException("status는 'active' 혹은 'inactive' 값만 허용됩니다.");
+      }
+      status = requestedStatus as 'active' | 'inactive';
+    }
+    const result = await this.travelService.listTravels(req.currentUser.id, { page, limit, status });
     return success(result);
   }
 

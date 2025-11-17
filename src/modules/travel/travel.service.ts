@@ -130,6 +130,16 @@ export class TravelService {
     };
   }
 
+  private buildStatusCondition(status: 'active' | 'inactive' | undefined, alias: string): string {
+    if (status === 'active') {
+      return `AND ${alias}.end_date >= CURRENT_DATE`;
+    }
+    if (status === 'inactive') {
+      return `AND ${alias}.end_date < CURRENT_DATE`;
+    }
+    return '';
+  }
+
   private async ensureTransaction<T>(callback: (client: PoolClient) => Promise<T>): Promise<T> {
     const pool = await getPool();
     const client = await pool.connect();
@@ -226,17 +236,20 @@ export class TravelService {
 
   async listTravels(
     userId: string,
-    pagination: { page?: number; limit?: number } = {},
+    pagination: { page?: number; limit?: number; status?: 'active' | 'inactive' } = {},
   ): Promise<{ total: number; page: number; limit: number; items: TravelSummary[] }> {
     const pool = await getPool();
     const page = Math.max(1, pagination.page ?? 1);
     const limit = Math.min(100, Math.max(1, pagination.limit ?? 20));
     const offset = (page - 1) * limit;
+    const statusCondition = this.buildStatusCondition(pagination.status, 't');
 
     const totalPromise = pool.query(
       `SELECT COUNT(*)::int AS total
        FROM travel_members tm
-       WHERE tm.user_id = $1`,
+       INNER JOIN travels t ON t.id = tm.travel_id
+       WHERE tm.user_id = $1
+       ${statusCondition}`,
       [userId],
     );
 
@@ -259,6 +272,8 @@ export class TravelService {
          SELECT t.*, tm.role
          FROM travels t
          INNER JOIN travel_members tm ON tm.travel_id = t.id AND tm.user_id = $1
+         WHERE 1 = 1
+         ${statusCondition}
        ) AS ut
        INNER JOIN profiles owner_profile ON owner_profile.id = ut.owner_id
        LEFT JOIN LATERAL (
