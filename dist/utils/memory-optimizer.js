@@ -9,8 +9,13 @@ class MemoryOptimizer {
         this.setupProcessEventHandlers();
     }
     static setupMemoryMonitoring() {
-        // 메모리 사용량을 주기적으로 체크 (운영환경에서는 1시간마다, 개발환경에서는 15분마다)
-        const monitoringInterval = process.env.NODE_ENV === 'production' ? 60 * 60 * 1000 : 15 * 60 * 1000;
+        // Railway Sleep 모드 지원: 개발환경에서는 백그라운드 모니터링 완전 비활성화
+        if (process.env.NODE_ENV !== 'production') {
+            this.logger.log('Memory monitoring disabled in development for Railway Sleep mode support');
+            return;
+        }
+        // 운영환경에서만 메모리 모니터링 (2시간마다)
+        const monitoringInterval = 2 * 60 * 60 * 1000; // 2시간
         setInterval(() => {
             const memoryUsage = process.memoryUsage();
             const heapUsedMB = Math.round(memoryUsage.heapUsed / 1024 / 1024);
@@ -38,9 +43,13 @@ class MemoryOptimizer {
         }, monitoringInterval);
     }
     static setupGCOptimization() {
-        // 개발 환경에서만 강제 GC 활성화
-        if (process.env.NODE_ENV === 'development' && typeof global.gc === 'function') {
-            // 10분마다 강제 GC 실행
+        // Railway Sleep 모드 지원: 개발환경에서는 백그라운드 GC 완전 비활성화
+        if (process.env.NODE_ENV !== 'production') {
+            this.logger.log('Background GC disabled in development for Railway Sleep mode support');
+            return;
+        }
+        // 운영환경에서만 강제 GC (2시간마다)
+        if (typeof global.gc === 'function') {
             this.gcInterval = setInterval(() => {
                 const beforeGC = process.memoryUsage();
                 global.gc();
@@ -52,7 +61,7 @@ class MemoryOptimizer {
                         heapUsedAfter: `${Math.round(afterGC.heapUsed / 1024 / 1024)}MB`,
                     });
                 }
-            }, 60 * 60 * 1000); // 1시간으로 변경
+            }, 2 * 60 * 60 * 1000); // 2시간
         }
     }
     static setupProcessEventHandlers() {

@@ -33,12 +33,13 @@ export class SmartCacheService {
   private tagMap = new Map<string, Set<string>>(); // tag -> keys
 
   constructor(private readonly cacheService: CacheService) {
-    // 통계 로깅 (개발환경에서만, 30분마다로 변경)
-    if (process.env.NODE_ENV === 'development' || process.env.ENABLE_CACHE_STATS === 'true') {
+    // Railway Sleep 모드 지원: 백그라운드 로깅 완전 비활성화 (운영환경에서만 활성화)
+    if (process.env.NODE_ENV === 'production' && process.env.ENABLE_CACHE_STATS === 'true') {
       setInterval(() => {
         this.logStats();
-      }, 30 * 60 * 1000); // 30분으로 변경
+      }, 2 * 60 * 60 * 1000); // 운영환경에서만 2시간마다
     }
+    this.logger.log('Smart cache background logging disabled for Railway Sleep mode support');
   }
 
   // 스마트 캐시 조회 (백그라운드 갱신 지원)
