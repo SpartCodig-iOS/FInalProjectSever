@@ -150,7 +150,7 @@ PATCH /api/v1/profile/me          # 프로필 수정 (이미지 업로드 포함
 #### 📊 메타 정보
 ```http
 GET /api/v1/meta/countries        # 국가/통화 정보
-GET /api/v1/meta/exchange-rate    # 실시간 환율
+GET /api/v1/meta/exchange-rate?base=KRW&quote=USD&baseAmount=5000    # 실시간 환율
 ```
 
 ---
