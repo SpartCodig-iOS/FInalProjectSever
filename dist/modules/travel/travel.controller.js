@@ -30,7 +30,15 @@ let TravelController = class TravelController {
         }
         const page = Number(request.query?.page ?? '1') || 1;
         const limit = Number(request.query?.limit ?? '20') || 20;
-        const result = await this.travelService.listTravels(req.currentUser.id, { page, limit });
+        const requestedStatus = request.query?.status?.toLowerCase();
+        let status;
+        if (requestedStatus) {
+            if (requestedStatus !== 'active' && requestedStatus !== 'inactive') {
+                throw new common_1.BadRequestException("status는 'active' 혹은 'inactive' 값만 허용됩니다.");
+            }
+            status = requestedStatus;
+        }
+        const result = await this.travelService.listTravels(req.currentUser.id, { page, limit, status });
         return (0, api_1.success)(result);
     }
     async create(body, req) {
@@ -91,6 +99,12 @@ __decorate([
     (0, swagger_1.ApiOkResponse)({ type: travel_response_dto_1.TravelSummaryDto, isArray: true }),
     (0, swagger_1.ApiQuery)({ name: 'page', required: false, type: Number, example: 1 }),
     (0, swagger_1.ApiQuery)({ name: 'limit', required: false, type: Number, example: 20 }),
+    (0, swagger_1.ApiQuery)({
+        name: 'status',
+        required: false,
+        enum: ['active', 'inactive'],
+        description: '여행 상태에 따라 목록을 필터링합니다.',
+    }),
     __param(0, (0, common_1.Req)()),
     __param(1, (0, common_1.Req)()),
     __metadata("design:type", Function),
@@ -161,7 +175,7 @@ __decorate([
         },
     }),
     (0, swagger_1.ApiOkResponse)({ type: travel_response_dto_1.TravelSummaryDto }),
-    __param(0, (0, common_1.Param)('travelId')),
+    __param(0, (0, common_1.Param)('travelId', new common_1.ParseUUIDPipe({ version: '4' }))),
     __param(1, (0, common_1.Body)()),
     __param(2, (0, common_1.Req)()),
     __metadata("design:type", Function),
@@ -172,8 +186,8 @@ __decorate([
     (0, common_1.Delete)(':travelId/members/:memberId'),
     (0, common_1.HttpCode)(common_1.HttpStatus.OK),
     (0, swagger_1.ApiOperation)({ summary: '여행 멤버 삭제 (호스트 전용)' }),
-    __param(0, (0, common_1.Param)('travelId')),
-    __param(1, (0, common_1.Param)('memberId')),
+    __param(0, (0, common_1.Param)('travelId', new common_1.ParseUUIDPipe({ version: '4' }))),
+    __param(1, (0, common_1.Param)('memberId', new common_1.ParseUUIDPipe({ version: '4' }))),
     __param(2, (0, common_1.Req)()),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [String, String, Object]),
@@ -184,7 +198,7 @@ __decorate([
     (0, common_1.HttpCode)(common_1.HttpStatus.CREATED),
     (0, swagger_1.ApiOperation)({ summary: '여행 초대 코드 생성' }),
     (0, swagger_1.ApiOkResponse)({ type: travel_response_dto_1.TravelInviteResponseDto }),
-    __param(0, (0, common_1.Param)('travelId')),
+    __param(0, (0, common_1.Param)('travelId', new common_1.ParseUUIDPipe({ version: '4' }))),
     __param(1, (0, common_1.Req)()),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [String, Object]),
@@ -214,7 +228,7 @@ __decorate([
     (0, common_1.Delete)(':travelId'),
     (0, common_1.HttpCode)(common_1.HttpStatus.OK),
     (0, swagger_1.ApiOperation)({ summary: '여행 삭제 (호스트 전용)' }),
-    __param(0, (0, common_1.Param)('travelId')),
+    __param(0, (0, common_1.Param)('travelId', new common_1.ParseUUIDPipe({ version: '4' }))),
     __param(1, (0, common_1.Req)()),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [String, Object]),

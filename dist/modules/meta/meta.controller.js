@@ -27,14 +27,18 @@ let MetaController = class MetaController {
         const countries = await this.metaService.getCountries();
         return (0, api_1.success)(countries);
     }
-    async getExchangeRate(baseCurrency, quoteCurrency) {
+    async getExchangeRate(baseCurrency, quoteCurrency, baseAmount) {
         if (!baseCurrency || baseCurrency.length !== 3) {
             throw new common_1.BadRequestException('base 파라미터는 3자리 통화 코드여야 합니다.');
         }
         if (!quoteCurrency || quoteCurrency.length !== 3) {
             throw new common_1.BadRequestException('quote 파라미터는 3자리 통화 코드여야 합니다.');
         }
-        const rate = await this.metaService.getExchangeRate(baseCurrency, quoteCurrency, 1000);
+        const parsedAmount = baseAmount ? Number(baseAmount) : 1000;
+        if (!Number.isFinite(parsedAmount) || parsedAmount <= 0) {
+            throw new common_1.BadRequestException('baseAmount 파라미터는 0보다 큰 숫자여야 합니다.');
+        }
+        const rate = await this.metaService.getExchangeRate(baseCurrency, quoteCurrency, parsedAmount);
         return (0, api_1.success)(rate);
     }
 };
@@ -55,8 +59,9 @@ __decorate([
     (0, swagger_1.ApiOkResponse)({ type: exchange_rate_dto_1.ExchangeRateDto }),
     __param(0, (0, common_1.Query)('base')),
     __param(1, (0, common_1.Query)('quote')),
+    __param(2, (0, common_1.Query)('baseAmount')),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [String, String]),
+    __metadata("design:paramtypes", [String, String, String]),
     __metadata("design:returntype", Promise)
 ], MetaController.prototype, "getExchangeRate", null);
 exports.MetaController = MetaController = __decorate([

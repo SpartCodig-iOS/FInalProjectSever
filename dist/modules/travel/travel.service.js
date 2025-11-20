@@ -42,7 +42,7 @@ let TravelService = TravelService_1 = class TravelService {
          t.base_currency,
          t.base_exchange_rate,
          t.invite_code,
-         t.status,
+         CASE WHEN t.end_date < CURRENT_DATE THEN 'inactive' ELSE 'active' END AS status,
          t.created_at::text,
          tm.role,
          owner_profile.name AS owner_name,
@@ -88,6 +88,15 @@ let TravelService = TravelService_1 = class TravelService {
             members: row.members ?? undefined,
         };
     }
+    buildStatusCondition(status, alias) {
+        if (status === 'active') {
+            return `AND ${alias}.end_date >= CURRENT_DATE`;
+        }
+        if (status === 'inactive') {
+            return `AND ${alias}.end_date < CURRENT_DATE`;
+        }
+        return '';
+    }
     async ensureTransaction(callback) {
         const pool = await (0, pool_1.getPool)();
         const client = await pool.connect();
@@ -113,7 +122,7 @@ let TravelService = TravelService_1 = class TravelService {
                 const ownerName = currentUser.name ?? currentUser.email ?? '알 수 없는 사용자';
                 const insertResult = await client.query(`WITH new_travel AS (
              INSERT INTO travels (owner_id, title, start_date, end_date, country_code, base_currency, base_exchange_rate, status)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, 'active')
+             VALUES ($1, $2, $3, $4, $5, $6, $7, CASE WHEN $4 < CURRENT_DATE THEN 'inactive' ELSE 'active' END)
              RETURNING id,
                        title,
                        start_date,
@@ -180,9 +189,12 @@ let TravelService = TravelService_1 = class TravelService {
         const page = Math.max(1, pagination.page ?? 1);
         const limit = Math.min(100, Math.max(1, pagination.limit ?? 20));
         const offset = (page - 1) * limit;
+        const statusCondition = this.buildStatusCondition(pagination.status, 't');
         const totalPromise = pool.query(`SELECT COUNT(*)::int AS total
        FROM travel_members tm
-       WHERE tm.user_id = $1`, [userId]);
+       INNER JOIN travels t ON t.id = tm.travel_id
+       WHERE tm.user_id = $1
+       ${statusCondition}`, [userId]);
         const listPromise = pool.query(`SELECT
          ut.id::text AS id,
          ut.title,
@@ -192,15 +204,18 @@ let TravelService = TravelService_1 = class TravelService {
          ut.base_currency,
          ut.base_exchange_rate,
          ut.invite_code,
-         ut.status,
+         ut.computed_status AS status,
          ut.role,
          ut.created_at::text,
          owner_profile.name AS owner_name,
          COALESCE(members.members, '[]'::json) AS members
        FROM (
-         SELECT t.*, tm.role
+         SELECT t.*, tm.role,
+                CASE WHEN t.end_date < CURRENT_DATE THEN 'inactive' ELSE 'active' END AS computed_status
          FROM travels t
          INNER JOIN travel_members tm ON tm.travel_id = t.id AND tm.user_id = $1
+         WHERE 1 = 1
+         ${statusCondition}
        ) AS ut
        INNER JOIN profiles owner_profile ON owner_profile.id = ut.owner_id
        LEFT JOIN LATERAL (
@@ -265,7 +280,7 @@ let TravelService = TravelService_1 = class TravelService {
               ti.used_count,
               ti.max_uses,
               ti.expires_at,
-              t.status AS travel_status
+              CASE WHEN t.end_date < CURRENT_DATE THEN 'inactive' ELSE 'active' END AS travel_status
        FROM travel_invites ti
        INNER JOIN travels t ON t.id = ti.travel_id
        WHERE ti.invite_code = $1
@@ -306,6 +321,7 @@ let TravelService = TravelService_1 = class TravelService {
            country_code = $6,
            base_currency = $7,
            base_exchange_rate = $8,
+           status = CASE WHEN $5 < CURRENT_DATE THEN 'inactive' ELSE 'active' END,
            updated_at = NOW()
        WHERE id = $1 AND owner_id = $2
        RETURNING
