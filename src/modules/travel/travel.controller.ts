@@ -229,8 +229,8 @@ export class TravelController {
     if (!req.currentUser) {
       throw new UnauthorizedException('Unauthorized');
     }
-    await this.travelService.leaveTravel(travelId, req.currentUser.id);
-    return success({}, 'Left travel');
+    const result = await this.travelService.leaveTravel(travelId, req.currentUser.id);
+    return success(result, result.deletedTravel ? 'Travel deleted' : 'Left travel');
   }
 
   @Delete(':travelId')

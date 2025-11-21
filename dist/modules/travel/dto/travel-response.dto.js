@@ -128,6 +128,10 @@ __decorate([
     __metadata("design:type", Object)
 ], TravelExpenseDto.prototype, "category", void 0);
 __decorate([
+    (0, swagger_1.ApiProperty)({ example: 'e11cc73b-052d-4740-8213-999c05bfc332' }),
+    __metadata("design:type", String)
+], TravelExpenseDto.prototype, "authorId", void 0);
+__decorate([
     (0, swagger_1.ApiProperty)({ example: 'owner' }),
     __metadata("design:type", String)
 ], TravelExpenseDto.prototype, "payerId", void 0);

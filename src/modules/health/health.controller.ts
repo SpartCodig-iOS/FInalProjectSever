@@ -1,24 +1,33 @@
 import { Controller, Get, HttpCode, HttpStatus } from '@nestjs/common';
 import { ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { success } from '../../types/api';
-import { SupabaseService } from '../../services/supabaseService';
 import { CacheService } from '../../services/cacheService';
 import { getPoolStats } from '../../db/pool';
 import { HealthResponseDto } from './dto/health-response.dto';
 import { MemoryOptimizer } from '../../utils/memory-optimizer';
 import { SmartCacheService } from '../../services/smart-cache.service';
+import { getPool } from '../../db/pool';
 
 @ApiTags('Health')
 @Controller()
 export class HealthController {
-  private lastHealthCheck: { result: 'ok' | 'unavailable' | 'not_configured'; timestamp: number } | null = null;
-  private readonly HEALTH_CACHE_TTL = 30 * 1000; // 30초 캐시
+  private lastHealthCheck: { result: 'ok' | 'unavailable'; timestamp: number } | null = null;
+  private readonly HEALTH_CACHE_TTL = 5 * 1000; // 5초 캐시 (빠른 회복)
 
   constructor(
-    private readonly supabaseService: SupabaseService,
     private readonly cacheService: CacheService,
     private readonly smartCacheService: SmartCacheService,
   ) {}
+
+  private async checkDatabaseHealth(): Promise<'ok' | 'unavailable'> {
+    try {
+      const pool = await getPool();
+      await pool.query('SELECT 1');
+      return 'ok';
+    } catch (error) {
+      return 'unavailable';
+    }
+  }
 
   @Get('health')
   @HttpCode(HttpStatus.OK)
@@ -35,17 +44,10 @@ export class HealthController {
     }
 
     // 빠른 헬스 체크 (타임아웃 500ms)
-    let database: 'ok' | 'unavailable' | 'not_configured';
-    try {
-      database = await Promise.race([
-        this.supabaseService.checkProfilesHealth(),
-        new Promise<'unavailable'>((resolve) =>
-          setTimeout(() => resolve('unavailable'), 500)
-        )
-      ]);
-    } catch (error) {
-      database = 'unavailable';
-    }
+    const database = await Promise.race([
+      this.checkDatabaseHealth(),
+      new Promise<'unavailable'>((resolve) => setTimeout(() => resolve('unavailable'), 1500)),
+    ]);
 
     // 결과 캐싱
     this.lastHealthCheck = { result: database, timestamp: now };

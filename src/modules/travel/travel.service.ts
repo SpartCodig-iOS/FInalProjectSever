@@ -484,10 +484,11 @@ export class TravelService {
     return this.fetchSummaryForMember(inviteRow.travel_id, userId);
   }
 
-  async leaveTravel(travelId: string, userId: string): Promise<void> {
+  async leaveTravel(travelId: string, userId: string): Promise<{ deletedTravel: boolean }> {
     const pool = await getPool();
     const membership = await pool.query(
-      `SELECT tm.role, t.owner_id
+      `SELECT tm.role, t.owner_id,
+              (SELECT COUNT(*)::int FROM travel_members WHERE travel_id = $1) AS member_count
        FROM travel_members tm
        INNER JOIN travels t ON t.id = tm.travel_id
        WHERE tm.travel_id = $1 AND tm.user_id = $2
@@ -499,14 +500,25 @@ export class TravelService {
     if (!row) {
       throw new NotFoundException('여행을 찾을 수 없거나 멤버가 아닙니다.');
     }
-    if (row.owner_id === userId || row.role === 'owner') {
-      throw new ForbiddenException('여행 관리자는 여행에서 나갈 수 없습니다.');
+
+    // 관리자가 아닌 일반 멤버 탈퇴: 멤버만 제거, 데이터 유지
+    if (row.role !== 'owner' && row.owner_id !== userId) {
+      await pool.query(
+        `DELETE FROM travel_members WHERE travel_id = $1 AND user_id = $2`,
+        [travelId, userId],
+      );
+      return { deletedTravel: false };
     }
 
-    await pool.query(
-      `DELETE FROM travel_members WHERE travel_id = $1 AND user_id = $2`,
-      [travelId, userId],
-    );
+    // 관리자(호스트) 탈퇴 처리
+    const memberCount = row.member_count ?? 1;
+    if (memberCount > 1) {
+      throw new BadRequestException('탈퇴하려면 먼저 다른 멤버에게 관리자 권한을 위임해야 합니다.');
+    }
+
+    // 마지막 멤버(호스트)라면 프로젝트 자체 삭제
+    await this.deleteTravel(travelId, userId);
+    return { deletedTravel: true };
   }
 
   async updateTravel(

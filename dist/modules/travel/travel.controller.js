@@ -95,8 +95,8 @@ let TravelController = class TravelController {
         if (!req.currentUser) {
             throw new common_1.UnauthorizedException('Unauthorized');
         }
-        await this.travelService.leaveTravel(travelId, req.currentUser.id);
-        return (0, api_1.success)({}, 'Left travel');
+        const result = await this.travelService.leaveTravel(travelId, req.currentUser.id);
+        return (0, api_1.success)(result, result.deletedTravel ? 'Travel deleted' : 'Left travel');
     }
     async deleteTravel(travelId, req) {
         if (!req.currentUser) {

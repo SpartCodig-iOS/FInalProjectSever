@@ -13,19 +13,28 @@ exports.HealthController = void 0;
 const common_1 = require("@nestjs/common");
 const swagger_1 = require("@nestjs/swagger");
 const api_1 = require("../../types/api");
-const supabaseService_1 = require("../../services/supabaseService");
 const cacheService_1 = require("../../services/cacheService");
 const pool_1 = require("../../db/pool");
 const health_response_dto_1 = require("./dto/health-response.dto");
 const memory_optimizer_1 = require("../../utils/memory-optimizer");
 const smart_cache_service_1 = require("../../services/smart-cache.service");
+const pool_2 = require("../../db/pool");
 let HealthController = class HealthController {
-    constructor(supabaseService, cacheService, smartCacheService) {
-        this.supabaseService = supabaseService;
+    constructor(cacheService, smartCacheService) {
         this.cacheService = cacheService;
         this.smartCacheService = smartCacheService;
         this.lastHealthCheck = null;
-        this.HEALTH_CACHE_TTL = 30 * 1000; // 30초 캐시
+        this.HEALTH_CACHE_TTL = 5 * 1000; // 5초 캐시 (빠른 회복)
+    }
+    async checkDatabaseHealth() {
+        try {
+            const pool = await (0, pool_2.getPool)();
+            await pool.query('SELECT 1');
+            return 'ok';
+        }
+        catch (error) {
+            return 'unavailable';
+        }
     }
     async health() {
         // 캐시된 헬스 체크 결과 사용 (30초 캐시)
@@ -37,16 +46,10 @@ let HealthController = class HealthController {
             });
         }
         // 빠른 헬스 체크 (타임아웃 500ms)
-        let database;
-        try {
-            database = await Promise.race([
-                this.supabaseService.checkProfilesHealth(),
-                new Promise((resolve) => setTimeout(() => resolve('unavailable'), 500))
-            ]);
-        }
-        catch (error) {
-            database = 'unavailable';
-        }
+        const database = await Promise.race([
+            this.checkDatabaseHealth(),
+            new Promise((resolve) => setTimeout(() => resolve('unavailable'), 1500)),
+        ]);
         // 결과 캐싱
         this.lastHealthCheck = { result: database, timestamp: now };
         return (0, api_1.success)({
@@ -211,7 +214,6 @@ __decorate([
 exports.HealthController = HealthController = __decorate([
     (0, swagger_1.ApiTags)('Health'),
     (0, common_1.Controller)(),
-    __metadata("design:paramtypes", [supabaseService_1.SupabaseService,
-        cacheService_1.CacheService,
+    __metadata("design:paramtypes", [cacheService_1.CacheService,
         smart_cache_service_1.SmartCacheService])
 ], HealthController);

@@ -93,9 +93,9 @@ let TravelExpenseService = class TravelExpenseService {
         try {
             await client.query('BEGIN');
             const expenseResult = await client.query(`INSERT INTO travel_expenses
-           (travel_id, title, note, amount, currency, converted_amount, expense_date, category, payer_id)
+           (travel_id, title, note, amount, currency, converted_amount, expense_date, category, payer_id, author_id)
          VALUES
-           ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+           ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
          RETURNING
            id::text,
            title,
@@ -105,7 +105,8 @@ let TravelExpenseService = class TravelExpenseService {
            converted_amount,
            expense_date::text,
            category,
-           payer_id::text`, [
+           payer_id::text,
+           author_id::text`, [
                 travelId,
                 payload.title,
                 payload.note ?? null,
@@ -115,6 +116,7 @@ let TravelExpenseService = class TravelExpenseService {
                 payload.expenseDate,
                 payload.category ?? null,
                 payerId,
+                userId,
             ]);
             const expense = expenseResult.rows[0];
             // 배치 INSERT로 성능 최적화
@@ -137,6 +139,7 @@ let TravelExpenseService = class TravelExpenseService {
                 convertedAmount: Number(expense.converted_amount),
                 expenseDate: expense.expense_date,
                 category: expense.category,
+                authorId: expense.author_id,
                 payerId: expense.payer_id,
                 payerName,
                 participants,
@@ -168,6 +171,7 @@ let TravelExpenseService = class TravelExpenseService {
          e.converted_amount,
          e.expense_date::text,
          e.category,
+         e.author_id::text,
          e.payer_id::text,
          payer.name AS payer_name,
         COALESCE(participants.participants, '[]'::json) AS participants
@@ -202,6 +206,7 @@ let TravelExpenseService = class TravelExpenseService {
                 category: row.category,
                 payerId: row.payer_id,
                 payerName: row.payer_name ?? null,
+                authorId: row.author_id,
                 participants: row.participants?.map((participant) => ({
                     memberId: participant.memberId,
                     name: participant.name ?? null,
@@ -211,7 +216,7 @@ let TravelExpenseService = class TravelExpenseService {
     }
     /**
      * 지출을 삭제합니다.
-     * 권한: 지출 작성자 또는 여행 호스트만 삭제 가능
+     * 권한: 지출 작성자만 삭제 가능
      */
     async deleteExpense(travelId, expenseId, userId) {
         const pool = await (0, pool_1.getPool)();
@@ -222,19 +227,16 @@ let TravelExpenseService = class TravelExpenseService {
          e.id::text,
          e.travel_id::text,
          e.payer_id::text,
-         t.owner_id::text
+         e.author_id::text
        FROM travel_expenses e
-       INNER JOIN travels t ON t.id = e.travel_id
        WHERE e.id = $1 AND e.travel_id = $2`, [expenseId, travelId]);
         const expense = expenseResult.rows[0];
         if (!expense) {
             throw new common_1.NotFoundException('지출을 찾을 수 없습니다.');
         }
-        // 3. 권한 확인: 지출 작성자 OR 여행 호스트만 삭제 가능
-        const isExpensePayer = expense.payer_id === userId;
-        const isTravelOwner = expense.owner_id === userId;
-        if (!isExpensePayer && !isTravelOwner) {
-            throw new common_1.ForbiddenException('지출 작성자 또는 여행 호스트만 삭제할 수 있습니다.');
+        // 3. 권한 확인: 지출 작성자만 삭제 가능
+        if (expense.author_id !== userId) {
+            throw new common_1.ForbiddenException('지출 작성자만 삭제할 수 있습니다.');
         }
         // 4. 트랜잭션으로 지출 및 관련 데이터 삭제
         const client = await pool.connect();

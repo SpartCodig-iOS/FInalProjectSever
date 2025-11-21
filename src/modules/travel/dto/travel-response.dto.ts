@@ -85,6 +85,9 @@ export class TravelExpenseDto {
   @ApiProperty({ example: 'food', nullable: true })
   category?: string | null;
 
+  @ApiProperty({ example: 'e11cc73b-052d-4740-8213-999c05bfc332' })
+  authorId!: string;
+
   @ApiProperty({ example: 'owner' })
   payerId!: string;
 
